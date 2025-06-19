@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New Order Notification</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .logo {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .logo img {
+            width: 120px;
+            height: 160px;
+        }
+
+        h1 {
+            font-size: 20px;
+            margin-bottom: 20px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+        }
+
+        .order-details {
+            margin-left: 20px;
+        }
+
+        .order-item {
+            margin: 5px 0;
+        }
+
+        .seller-support {
+            color: #FF9500;
+            font-weight: bold;
+        }
+
+        .action-required {
+            background-color: #f9f9f9;
+            padding: 15px;
+            border-radius: 5px;
+        }
+
+        .important {
+            background-color: #fff7ed;
+            padding: 15px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="logo">
+        <img src="Buy Box orange.png">
+    </div>
+
+    <h1>Subject: New Order Notification – Order #<%= orderId %>
+    </h1>
+
+    <p>Dear <%= sellerName %>,</p>
+
+    <p>You have received a new order on BuyBox. Please find the order details below:</p>
+
+    <div class="section">
+        <h2>Order Details</h2>
+        <div class="order-details">
+            <div class="order-item">• Order ID: <%= orderId %>
+            </div>
+            <div class="order-item">• Order Date: <%= orderDate %>
+            </div>
+            <div class="order-item">• Buyer Name: <%= customerName %>
+            </div>
+            <div class="order-item">• Shipping Address: <%= customerAddress %>
+            </div>
+            <div class="order-item">• Item(s) Ordered:</div>
+            <% products.forEach(function(product) { %>
+                <div class="order-item">
+                    • <%= product.name %> – <%= product.quantity %> – <%= product.price %>
+                </div>
+                <% }); %>
+                    <div class="order-item">• Order Total: <%= totalAmount %>
+                    </div>
+                    <div class="order-item">• Shipping Method: <%= shippingMethod %>
+                    </div>
+        </div>
+    </div>
+
+    <div class="section action-required">
+        <h2>Action Required</h2>
+        <div class="order-details">
+            <div class="order-item">• Please confirm and ship the order by [SHIP-BY DATE].</div>
+            <div class="order-item">• Ensure that the order is shipped using the specified shipping method.</div>
+            <div class="order-item">• Update the tracking details as soon as the package is dispatched.</div>
+        </div>
+    </div>
+
+    <div class="section important">
+        <h2>Important Reminders:</h2>
+        <div class="order-details">
+            <div class="order-item">• Late shipments may result in order cancellations or performance penalties.</div>
+            <div class="order-item">• If you cannot fulfill this order, please cancel it as soon as possible.</div>
+        </div>
+    </div>
+
+    <p>For more details, log in to your BuyBox Seller Central: <a href="https://emporiumsc.co.za"
+            target="_blank">https://emporiumsc.co.za</a></p>
+
+    <p>Thank you for selling on BuyBox!</p>
+
+    <p>Best regards,<br>
+        <span class="seller-support">BuyBox Seller Support</span>
+    </p>
+</body>
+
+</html>

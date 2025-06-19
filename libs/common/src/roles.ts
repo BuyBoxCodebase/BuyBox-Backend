@@ -1,0 +1,1 @@
+export type Role = "CUSTOMER" | "SELLER" | "DELIVERY_AGENT" | "ADMIN" | "SUPER_ADMIN";
