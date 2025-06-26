@@ -298,35 +298,39 @@ model Coupon {
 }
 
 model CustomerCoupon {
-  id         String    @id @default(auto()) @map("_id") @db.ObjectId
-  couponId   String    @db.ObjectId
-  coupon     Coupon    @relation(fields: [couponId], references: [id], onDelete: Cascade)
-  userId     String    @db.ObjectId
-  user       Customer  @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expired    Boolean   @default(false)
-  expiryDate DateTime?
-  used       Boolean   @default(false)
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  id              String            @id @default(auto()) @map("_id") @db.ObjectId
+  couponId        String            @db.ObjectId
+  coupon          Coupon            @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  userId          String            @db.ObjectId
+  user            Customer          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expired         Boolean           @default(false)
+  expiryDate      DateTime?
+  used            Boolean           @default(false)
+  orderPreference OrderPreference[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model OrderPreference {
-  id             String      @id @default(auto()) @map("_id") @db.ObjectId
-  userId         String      @unique @db.ObjectId
-  user           Customer    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name           String
-  email          String?
-  phoneNumber    String?
-  address        String
-  city           String
-  state          String
-  postalCode     String
-  country        String      @default("India")
-  paymentMode    PaymentMode @default(CASH_ON_DELIVERY)
-  cardNumber     String?
-  cardType       String?
-  cardHolderName String?
-  isDefault      Boolean     @default(false)
+  id              String          @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String          @unique @db.ObjectId
+  user            Customer        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  email           String?
+  phoneNumber     String?
+  address         String
+  city            String
+  state           String
+  postalCode      String
+  country         String          @default("India")
+  paymentMode     PaymentMode     @default(CASH_ON_DELIVERY)
+  cardNumber      String?
+  cardType        String?
+  cardHolderName  String?
+  isDefault       Boolean         @default(false)
+  appliedCouponid String?         @db.ObjectId
+  appliedCoupon   CustomerCoupon? @relation(fields: [appliedCouponid], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -13,7 +13,7 @@ export class GoogleStrategyAdmin extends PassportStrategy(Strategy, 'google-admi
         super({
             clientID: configService.get<string>('GOOGLE_CLIENT_ID'),
             clientSecret: configService.get<string>('GOOGLE_CLIENT_SECRET'),
-            callbackURL: configService.get<string>('GOOGLE_CALLBACK_URL_SELLER'),
+            callbackURL: configService.get<string>('GOOGLE_CALLBACK_URL_ADMIN'),
             scope: ['email', 'profile'],
             passReqToCallback: true,
         });
