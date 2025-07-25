@@ -61,6 +61,8 @@ model Seller {
   googleId          String?
   facebookId        String?
   isCompleted       Boolean                 @default(false)
+  twoFactorSecret   String?
+  twoFactorEnabled  Boolean                 @default(false)
   brand             Brand?
   notificationPrefs NotificationPreference?
 
