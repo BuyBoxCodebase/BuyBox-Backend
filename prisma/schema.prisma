@@ -61,8 +61,6 @@ model Seller {
   googleId          String?
   facebookId        String?
   isCompleted       Boolean                 @default(false)
-  twoFactorSecret   String?
-  twoFactorEnabled  Boolean                 @default(false)
   brand             Brand?
   notificationPrefs NotificationPreference?
 
@@ -158,6 +156,7 @@ model Product {
   subCategory    SubCategory?     @relation(fields: [subCategoryId], references: [id])
   basePrice      Float
   attributes     Json?
+  isVerified     Boolean          @default(false)
   inventory      Inventory[]
   cartItems      CartItem[]
   orderItems     OrderProduct[]
@@ -209,6 +208,7 @@ model ProductVariant {
   description String?
   price       Float
   isDefault   Boolean         @default(false)
+  isVerified  Boolean         @default(false)
   images      String[]
   options     VariantOption[]
   inventory   Inventory[]
@@ -298,39 +298,35 @@ model Coupon {
 }
 
 model CustomerCoupon {
-  id              String            @id @default(auto()) @map("_id") @db.ObjectId
-  couponId        String            @db.ObjectId
-  coupon          Coupon            @relation(fields: [couponId], references: [id], onDelete: Cascade)
-  userId          String            @db.ObjectId
-  user            Customer          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  expired         Boolean           @default(false)
-  expiryDate      DateTime?
-  used            Boolean           @default(false)
-  orderPreference OrderPreference[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id         String    @id @default(auto()) @map("_id") @db.ObjectId
+  couponId   String    @db.ObjectId
+  coupon     Coupon    @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  userId     String    @db.ObjectId
+  user       Customer  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expired    Boolean   @default(false)
+  expiryDate DateTime?
+  used       Boolean   @default(false)
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 }
 
 model OrderPreference {
-  id              String          @id @default(auto()) @map("_id") @db.ObjectId
-  userId          String          @unique @db.ObjectId
-  user            Customer        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name            String
-  email           String?
-  phoneNumber     String?
-  address         String
-  city            String
-  state           String
-  postalCode      String
-  country         String          @default("India")
-  paymentMode     PaymentMode     @default(CASH_ON_DELIVERY)
-  cardNumber      String?
-  cardType        String?
-  cardHolderName  String?
-  isDefault       Boolean         @default(false)
-  appliedCouponid String?         @db.ObjectId
-  appliedCoupon   CustomerCoupon? @relation(fields: [appliedCouponid], references: [id])
+  id             String      @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String      @unique @db.ObjectId
+  user           Customer    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name           String
+  email          String?
+  phoneNumber    String?
+  address        String
+  city           String
+  state          String
+  postalCode     String
+  country        String      @default("India")
+  paymentMode    PaymentMode @default(CASH_ON_DELIVERY)
+  cardNumber     String?
+  cardType       String?
+  cardHolderName String?
+  isDefault      Boolean     @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
