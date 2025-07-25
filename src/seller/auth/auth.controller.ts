@@ -1,4 +1,15 @@
-import { BadRequestException, Body, Controller, Get, Post, Req, Res, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Get,
+  Post,
+  Req,
+  Res,
+  UploadedFiles,
+  UseGuards,
+  UseInterceptors,
+} from '@nestjs/common';
 import { Response } from 'express';
 import { SellerAuthService } from './auth.service';
 import { GoogleSellerAuthGuard } from './guards/google-auth.guard';
@@ -11,30 +22,48 @@ export class SellerAuthController {
   constructor(
     private readonly sellerAuthService: SellerAuthService,
     private readonly twoFactorService: TwoFactorService,
-  ) { }
+  ) {}
 
-  @Post("/upload/images")
+  @Post('/upload/images')
   @UseGuards(SessionAuthGuard)
-  @UseInterceptors(FilesInterceptor('files', 5, {
-    fileFilter(req, file, callback) {
-      if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
-        return callback(new BadRequestException('Only JPG, JPEG, and PNG files are allowed!'), false);
-      }
-      callback(null, true);
-    },
-  }))
+  @UseInterceptors(
+    FilesInterceptor('files', 5, {
+      fileFilter(req, file, callback) {
+        if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
+          return callback(
+            new BadRequestException(
+              'Only JPG, JPEG, and PNG files are allowed!',
+            ),
+            false,
+          );
+        }
+        callback(null, true);
+      },
+    }),
+  )
   uploadProfileImages(@UploadedFiles() files: Array<Express.Multer.File>) {
     return this.sellerAuthService.uploadProfileImage(files);
   }
 
   @Post('register')
-  async sellerRegister(@Body() body: { name: string; email: string; password: string; }) {
-    return this.sellerAuthService.registerSeller(body.email, body.password, body.name);
+  async sellerRegister(
+    @Body() body: { name: string; email: string; password: string },
+  ) {
+    return this.sellerAuthService.registerSeller(
+      body.email,
+      body.password,
+      body.name,
+    );
   }
 
   @Post('verify')
-  async verifySeller(@Body() body: { activationToken: string; activationCode: string; }) {
-    return this.sellerAuthService.verifySeller(body.activationToken, body.activationCode);
+  async verifySeller(
+    @Body() body: { activationToken: string; activationCode: string },
+  ) {
+    return this.sellerAuthService.verifySeller(
+      body.activationToken,
+      body.activationCode,
+    );
   }
 
   @UseGuards(LocalAuthGuard)
@@ -47,7 +76,7 @@ export class SellerAuthController {
       return {
         requiresTwoFactor: true,
         userId: req.user.userId,
-        message: 'Two-factor authentication required'
+        message: 'Two-factor authentication required',
       };
     }
 
@@ -56,9 +85,7 @@ export class SellerAuthController {
   }
 
   @Post('login/2fa')
-  async verifyTwoFactorLogin(
-    @Body() body: { email: string, code: string }
-  ) {
+  async verifyTwoFactorLogin(@Body() body: { email: string; code: string }) {
     // Find the user by email
     const user = await this.sellerAuthService.findUserByEmail(body.email);
 
@@ -69,7 +96,7 @@ export class SellerAuthController {
     // Verify the 2FA code
     const isValid = await this.twoFactorService.verifyTwoFactorCode(
       body.code,
-      user.twoFactorSecret
+      user.twoFactorSecret,
     );
 
     if (!isValid) {
@@ -81,17 +108,17 @@ export class SellerAuthController {
       user: {
         userId: user.id,
         email: user.email,
-        role: "SELLER",
+        role: 'SELLER',
         isCompleted: user.isCompleted,
         profilePic: user.profilePic,
-        name: user.name
-      }
+        name: user.name,
+      },
     };
   }
 
   @UseGuards(GoogleSellerAuthGuard)
   @Get('google')
-  async googleAuthSeller() { }
+  async googleAuthSeller() {}
 
   @UseGuards(GoogleSellerAuthGuard)
   @Get('google/callback')
@@ -133,7 +160,11 @@ export class SellerAuthController {
   }
 
   @Post('google/2fa')
-  async verifyGoogleTwoFactor(@Req() req, @Body() body: { code: string }, @Res() res: Response) {
+  async verifyGoogleTwoFactor(
+    @Req() req,
+    @Body() body: { code: string },
+    @Res() res: Response,
+  ) {
     if (!req.session.googleAuthPending || !req.session.googleAuthUser) {
       throw new BadRequestException('Invalid session state');
     }
@@ -143,7 +174,7 @@ export class SellerAuthController {
     // Verify the 2FA code
     const isValid = await this.twoFactorService.verifyTwoFactorCode(
       body.code,
-      user.twoFactorSecret
+      user.twoFactorSecret,
     );
 
     if (!isValid) {
@@ -158,13 +189,13 @@ export class SellerAuthController {
     req.login(user, (err) => {
       if (err) {
         console.error('Login error:', err);
-        return res.redirect('https://localhost:5173/seller?auth=error');
+        return res.redirect('http://localhost:5173/seller?auth=error');
       }
 
       req.session.save((err) => {
         if (err) {
           console.error('Session save error:', err);
-          return res.redirect('https://localhost:5173/seller?auth=failed');
+          return res.redirect('http://localhost:5173/seller?auth=failed');
         }
 
         return res.status(200).json({ success: true });
