@@ -1,10 +1,10 @@
 import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { InventoryService } from './inventory.service';
+import { JwtAuthGuard } from '../customer/auth/guards/jwt-auth.guard';
 import { GetUser } from '../../libs/common/src/get-user.decorator';
 import { Roles, RolesGuard } from '../../libs/common/src';
-import { SessionAuthGuard } from '../../libs/shared/src';
 
-@UseGuards(SessionAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('inventory')
 export class InventoryController {
   constructor(private readonly inventoryService: InventoryService) { }
@@ -33,13 +33,13 @@ export class InventoryController {
   }
 
   @Get('seller')
-  @UseGuards(SessionAuthGuard)
+  @UseGuards(JwtAuthGuard)
   async getSellerInventory(@GetUser("userId") userId: string,) {
     return await this.inventoryService.getSellerInventory({ userId });
   }
 
   @Post('batch-update')
-  @UseGuards(SessionAuthGuard)
+  @UseGuards(JwtAuthGuard)
   async batchUpdateInventory(
     @GetUser("userId") userId: string,
     @Body() updateData: { updates: Array<{ variantId: string; quantity: number }> }

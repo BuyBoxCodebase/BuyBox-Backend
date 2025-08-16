@@ -1,11 +1,11 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { CloudinaryService } from '../../cloudinary/cloudinary.service';
-import { MailerService } from '../../mailer/mailer.service';
-import { PrismaService } from '../../prisma/prisma.service';
+import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import { MailerService } from 'src/mailer/mailer.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 import * as argon2 from 'argon2';
-import { generateOTP } from '../../../libs/common/src';
-import { SellerActivationTokenPayload } from './jwt-payload.interface';
+import { generateOTP } from '@app/common';
+import { JwtPayload, SellerActivationTokenPayload } from './jwt-payload.interface';
 
 @Injectable()
 export class SellerAuthService {
@@ -27,7 +27,7 @@ export class SellerAuthService {
         return urls;
     }
 
-    async registerSeller(email: string, password: string, name: string) {
+    async registerSeller(email: string, password: string, name: string, phoneNumber: string) {
         const hashedPassword = await argon2.hash(password);
 
         // Check if email already exists
@@ -42,7 +42,7 @@ export class SellerAuthService {
 
         const activationCode = generateOTP(6);
         console.log(activationCode);
-        const payload: SellerActivationTokenPayload = { email, name, password: hashedPassword, code: activationCode };
+        const payload: SellerActivationTokenPayload = { email, name, password: hashedPassword, code: activationCode, phoneNumber };
         const token = this.jwtService.sign(payload, { expiresIn: '10m' });
 
         await this.mailService.sendMail({
@@ -71,9 +71,12 @@ export class SellerAuthService {
                     name: decoded.name,
                     email: decoded.email,
                     password: decoded.password,
+                    phoneNumber: decoded.phoneNumber,
                     isCompleted: false,
                 },
             });
+            const payload: JwtPayload = { email: user.email, sub: user.id, role: "SELLER" };
+            const accessToken = this.jwtService.sign(payload);
 
             return {
                 user: {
@@ -84,19 +87,14 @@ export class SellerAuthService {
                     profilePic: user.profilePic,
                     username: user.email,
                 },
+                accessToken
             };
         } catch (error) {
             throw new UnauthorizedException('Invalid or expired token');
         }
     }
 
-    async findUserByEmail(email: string) {
-        return this.prisma.seller.findUnique({
-            where: { email }
-        });
-    }
-
-    async validateUser(email: string, password: string) {
+    async loginSeller(email: string, password: string) {
         const user = await this.prisma.seller.findUnique({
             where: { email },
         });
@@ -105,18 +103,10 @@ export class SellerAuthService {
             throw new UnauthorizedException('Invalid credentials');
         }
 
-        delete user.password;
-        delete user.googleId;
-        delete user.facebookId;
-        delete user.createdAt;
-        delete user.updatedAt;
+        const payload: JwtPayload = { email: user.email, sub: user.id, role: "SELLER" };
+        const accessToken = this.jwtService.sign(payload);
 
-        return {
-            userId: user.id,
-            email: user.email,
-            role: "SELLER",
-            ...user
-        };
+        return { user, accessToken };
     }
 
     async sellerGoogleLogin(profile: any) {
@@ -132,20 +122,12 @@ export class SellerAuthService {
             },
         });
 
+        const payload: JwtPayload = { email: user.email, sub: user.id, role: "SELLER" };
+        const token = this.jwtService.sign(payload);
+
         return {
             user,
-            userId: user.id,
-            email: user.email,
-            role: "SELLER",
-            profilePic: user.profilePic,
-            isCompleted: user.isCompleted,
-            twoFactorEnabled: user.twoFactorEnabled,
-            twoFactorSecret: user.twoFactorSecret,
+            token,
         };
-    }
-
-    async logout(req: any) {
-        req.session.destroy();
-        return { message: 'Logged out successfully' };
     }
 }

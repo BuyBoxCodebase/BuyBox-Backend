@@ -2,9 +2,9 @@ import { Controller, Get, Post, Body, Patch, Param, Delete, UseInterceptors, Bad
 import { BrandService } from './brand.service';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { JwtAuthGuard } from '../customer/auth/guards/jwt-auth.guard';
 import { GetUser } from '../../libs/common/src/get-user.decorator';
 import { Roles, RolesGuard } from '../../libs/common/src';
-import { SessionAuthGuard } from '../../libs/shared/src';
 
 @Controller('brand')
 export class BrandController {
@@ -25,7 +25,7 @@ export class BrandController {
     return this.brandService.uploadBrandImage(files);
   }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("SELLER")
   @Post('/create')
   createBrand(@GetUser("userId") userId: string, @Body() createBrandDto: CreateBrandDto) {
@@ -42,14 +42,14 @@ export class BrandController {
     return this.brandService.getBrand(brandId);
   }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("SELLER")
   @Get('/get-my-brand')
   findOne(@GetUser("userId") userId: string) {
     return this.brandService.getMyBrand(userId);
   }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("SELLER")
   @Patch('/update-brand/:id')
   updateBrand(@GetUser() userId: string, @Param('id') id: string, @Body() updateBrandDto: CreateBrandDto) {
@@ -59,7 +59,7 @@ export class BrandController {
     });
   }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("SELLER")
   @Delete('/delete-brand/:id')
   deleteBrand(@GetUser("userId") userId: string, @Param('id') id: string) {

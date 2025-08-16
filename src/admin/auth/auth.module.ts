@@ -7,18 +7,13 @@ import { PassportModule } from '@nestjs/passport';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
+import { GoogleStrategyAdmin } from 'src/customer/auth/strategy/google.strategy';
 import { JwtStrategy } from 'src/customer/auth/strategy/jwt.strategy';
-import { SessionSerializer } from '../../../libs/shared/src';
-import { LocalStrategy } from './strategy/local.strategy';
-import { GoogleStrategyAdmin } from './strategy/google.strategy';
 
 @Module({
   imports: [
     PrismaModule,
-    PassportModule.register({
-      defaultStrategy: 'local',
-      session: true
-    }),
+    PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -36,8 +31,6 @@ import { GoogleStrategyAdmin } from './strategy/google.strategy';
     AdminAuthService,
     JwtStrategy,
     GoogleStrategyAdmin,
-    LocalStrategy,
-    SessionSerializer,
   ],
 })
 export class AdminAuthModule { }
