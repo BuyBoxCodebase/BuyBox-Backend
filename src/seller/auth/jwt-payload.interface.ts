@@ -10,6 +10,6 @@ export interface SellerActivationTokenPayload {
   name: string;
   email: string;
   password: string;
-  // phoneNumber: string;
+  phoneNumber: string;
   code: string;
 }

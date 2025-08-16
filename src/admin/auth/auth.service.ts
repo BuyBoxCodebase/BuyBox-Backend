@@ -45,9 +45,4 @@ export class AdminAuthService {
             token,
         };
     }
-
-    async logout(req: any) {
-        req.session.destroy();
-        return { message: 'Logged out successfully' };
-    }
 }

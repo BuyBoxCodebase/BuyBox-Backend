@@ -1,14 +1,14 @@
 import { BadRequestException, Body, Controller, Get, Patch, Post, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { AdminProfileService } from './profile.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { GetUser, Roles, RolesGuard } from '../../../libs/common/src';
-import { SessionAuthGuard } from '../../../libs/shared/src';
+import { GetUser, Roles, RolesGuard } from '@app/common';
 
-@UseGuards(SessionAuthGuard, RolesGuard)
 @Controller('admin/profile')
 export class AdminProfileController {
     constructor(private readonly adminProfileService: AdminProfileService) { }
 
+    @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles("ADMIN", "SUPER_ADMIN")
     @Post("/upload/images")
     @UseInterceptors(FilesInterceptor('files', 1, {
@@ -23,12 +23,14 @@ export class AdminProfileController {
         return this.adminProfileService.uploadProfileImage(files);
     }
 
+    @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles("ADMIN", "SUPER_ADMIN")
     @Get("/get-details")
     getProfile(@GetUser("userId") userId: string) {
         return this.adminProfileService.getProfile(userId);
     }
 
+    @UseGuards(JwtAuthGuard, RolesGuard)
     @Roles("ADMIN", "SUPER_ADMIN")
     @Patch('/update')
     updateProfile(@GetUser("userId") userId: string, @Body() body: { name: string; profilePic: string; }) {

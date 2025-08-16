@@ -1,9 +1,9 @@
 import { Controller, Get, UseGuards } from '@nestjs/common';
 import { SellerAnalyticsService } from './seller.analytics.service';
+import { JwtAuthGuard } from 'src/customer/auth/guards/jwt-auth.guard';
 import { GetUser, Roles, RolesGuard } from '@app/common';
-import { SessionAuthGuard } from '../../../libs/shared/src';
 
-@UseGuards(SessionAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('analytics/seller')
 export class SellerAnalyticsController {
     constructor(private readonly sellerAnalyticsService: SellerAnalyticsService) { }

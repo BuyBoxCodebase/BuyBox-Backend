@@ -61,8 +61,6 @@ model Seller {
   googleId          String?
   facebookId        String?
   isCompleted       Boolean                 @default(false)
-  twoFactorSecret   String?
-  twoFactorEnabled  Boolean                 @default(false)
   brand             Brand?
   notificationPrefs NotificationPreference?
 
@@ -158,7 +156,6 @@ model Product {
   subCategory    SubCategory?     @relation(fields: [subCategoryId], references: [id])
   basePrice      Float
   attributes     Json?
-  isVerified     Boolean          @default(false)
   inventory      Inventory[]
   cartItems      CartItem[]
   orderItems     OrderProduct[]
@@ -210,7 +207,6 @@ model ProductVariant {
   description String?
   price       Float
   isDefault   Boolean         @default(false)
-  isVerified  Boolean         @default(false)
   images      String[]
   options     VariantOption[]
   inventory   Inventory[]
