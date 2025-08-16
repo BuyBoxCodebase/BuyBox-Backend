@@ -3,16 +3,16 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 import { GetUser } from '../../libs/common/src/get-user.decorator';
 import { ProductService } from './product.service';
 import { CreateProductDto } from './dto/create-product.dto';
+import { JwtAuthGuard } from '../customer/auth/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../../libs/common/src';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
-import { SessionAuthGuard } from '../../libs/shared/src';
 
 @Controller('product')
 export class ProductController {
   constructor(private readonly productService: ProductService) { }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("SELLER")
   @UseInterceptors(FilesInterceptor('files', 5, {
     fileFilter(req, file, callback) {
@@ -27,14 +27,14 @@ export class ProductController {
     return this.productService.uploadFiles(files);
   }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("SELLER")
   @Post('/create')
   createProduct(@GetUser('userId') userId: string, @Body() body: CreateProductDto) {
     return this.productService.createProduct(userId, body);
   }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("SELLER")
   @Post('/create/variant/:productId')
   async createVariant(
@@ -45,7 +45,7 @@ export class ProductController {
     return await this.productService.createVariant(userId, productId, createVariantDto);
   }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("SELLER")
   @Post('/add/variant-options')
   async addVariants(
@@ -60,7 +60,7 @@ export class ProductController {
     return this.productService.getProducts({ categoryId: category });
   }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("SELLER")
   @Get("/get-seller-products")
   getSellerProducts(@GetUser("userId") userId: string) {
@@ -90,7 +90,7 @@ export class ProductController {
     return this.productService.getOptionValues(productId);
   }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("SELLER")
   @Patch('/update/:id')
   updateProduct(@Param('id') id: string, @GetUser('userId') userId: string, @Body() body: CreateProductDto) {
@@ -100,7 +100,7 @@ export class ProductController {
     });
   }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("SELLER")
   @Patch('/update/variant/:variantId')
   async updateVariant(
@@ -111,14 +111,14 @@ export class ProductController {
     return await this.productService.updateVariant(userId, variantId, updateVariantDto);
   }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("SELLER")
   @Delete('/delete/:id')
   deleteProduct(@GetUser("userId") userId: string, @Param('id') id: string) {
     return this.productService.deleteProduct(userId, id);
   }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("SELLER")
   @Delete('/delete/variant/:variantId')
   async deleteVariant(

@@ -6,9 +6,9 @@ import { UpdateAdvertisementDto } from './dto/update-ad.dto';
 import { AdQueryDto } from './dto/ad-query.dto';
 import { LogAdInteractionDto } from './dto/log-ad-interaction.dto';
 import { AdStatus, AdPlacement } from '@prisma/client';
+import { JwtAuthGuard } from 'src/admin/auth/guards/jwt-auth.guard';
+import { GetUser, Roles, RolesGuard } from '@app/common';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { GetUser, Roles, RolesGuard } from '../../libs/common/src';
-import { SessionAuthGuard } from '../../libs/shared/src';
 
 @Controller('ads')
 export class AdsController {
@@ -17,7 +17,7 @@ export class AdsController {
     private readonly adMetricsService: AdMetricsService,
   ) { }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("ADMIN", "SUPER_ADMIN")
   @Post("upload/images")
   @UseInterceptors(FilesInterceptor('files', 5, {
@@ -32,14 +32,14 @@ export class AdsController {
     return this.adsService.uploadAdMedia(files);
   }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("ADMIN", "SUPER_ADMIN")
   @Post('create')
   create(@GetUser("userId") userId: string, @Body() createAdvertisementDto: CreateAdvertisementDto) {
     return this.adsService.create(createAdvertisementDto, userId);
   }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("ADMIN", "SUPER_ADMIN")
   @Get('get')
   findAll(@Query() query: AdQueryDto) {
@@ -72,21 +72,21 @@ export class AdsController {
     return this.adsService.findOne(id);
   }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("ADMIN", "SUPER_ADMIN")
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateAdvertisementDto: UpdateAdvertisementDto) {
     return this.adsService.update(id, updateAdvertisementDto);
   }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("ADMIN", "SUPER_ADMIN")
   @Patch(':id/status')
   updateStatus(@Param('id') id: string, @Body('status') status: AdStatus) {
     return this.adsService.updateStatus(id, status);
   }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("ADMIN", "SUPER_ADMIN")
   @Delete(':id')
   remove(@Param('id') id: string) {
@@ -98,7 +98,7 @@ export class AdsController {
     return this.adsService.logInteraction(logData);
   }
 
-  // @UseGuards(SessionAuthGuard, RolesGuard)
+  // @UseGuards(JwtAuthGuard, RolesGuard)
   // @Roles("ADMIN")
   // @Get(':id/metrics')
   // getMetrics(
@@ -109,7 +109,7 @@ export class AdsController {
   //   return this.adMetricsService.getMetricsByDateRange(id, startDate, endDate);
   // }
 
-  @UseGuards(SessionAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("ADMIN", "SUPER_ADMIN")
   @Get(':id/performance')
   getPerformance(@Param('id') id: string) {

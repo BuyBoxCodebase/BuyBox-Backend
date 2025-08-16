@@ -102,13 +102,12 @@ export class CustomerAuthService {
             },
         });
 
+        const payload: JwtPayload = { email: user.email, sub: user.id, role: "CUSTOMER" };
+        const token = this.jwtService.sign(payload);
+
         return {
             user,
-            userId: user.id,
-            email: user.email,
-            role: "CUSTOMER",
-            profilePic: user.profilePic,
-            isCompleted: user.isCompleted,
+            token,
         };
     }
 
@@ -147,9 +146,5 @@ export class CustomerAuthService {
             photos: [{ value: payload.picture }],
             displayName: payload.name,
         });
-    }
-    async logoutCustomer(req: any) {
-        req.session.destroy();
-        return { message: 'Customer Logged out successfully' };
     }
 }

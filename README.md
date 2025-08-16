@@ -1,10 +1,10 @@
 
 
-# BuyBox Backend Documentation
+# Emporium Backend Documentation
 
 ## Overview
 
-BuyBox Backend is a server-side application built using the NestJS framework, providing a scalable and efficient solution for managing e-commerce operations. This documentation provides an overview of the project's architecture, features, and technical details.
+Emporium Backend is a server-side application built using the NestJS framework, providing a scalable and efficient solution for managing e-commerce operations. This documentation provides an overview of the project's architecture, features, and technical details.
 
 ## Project Structure
 

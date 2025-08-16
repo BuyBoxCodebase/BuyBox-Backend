@@ -3,7 +3,6 @@ import { CustomerAuthService } from './auth.service';
 import { GoogleCustomerAuthGuard } from './guards/google-auth.guard';
 import { FacebookAuthGuard } from './guards/facebook-auth.guard';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import { SessionAuthGuard } from '@app/shared';
 
 @Controller('customer/auth')
 export class CustomerAuthController {
@@ -26,11 +25,6 @@ export class CustomerAuthController {
     return this.customerAuthService.loginCustomer(body.email, body.password);
   }
 
-  @UseGuards(SessionAuthGuard)
-  @Post('logout')
-  async logout(@Req() req) {
-    return this.customerAuthService.logoutCustomer(req);
-  }
   @Post('google/mobile')
   async googleMobileAuth(@Body() body: { idToken: string }) {
     return this.customerAuthService.verifyGoogleIdToken(body.idToken);
@@ -43,28 +37,8 @@ export class CustomerAuthController {
   @UseGuards(GoogleCustomerAuthGuard)
   @Get('google/callback')
   async googleAuthCallbackCustomer(@Req() req, @Res() res) {
-    req.login(req.user, (err) => {
-      if (err) {
-        console.error('Login error:', err);
-        return res.redirect('http://localhost:5173/customer?auth=error');
-      }
-
-      console.log('User logged in, session:', req.session);
-
-      // Force session save
-      req.session.save((err) => {
-        if (err) {
-          console.error('Session save error:', err);
-          return res.redirect('http://localhost:5173/customer?auth=failed');
-        }
-
-        if (!req.user.isCompleted) {
-          return res.redirect('http://localhost:5173/customer?auth=pending');
-        }
-
-        return res.redirect('http://localhost:5173/customer?auth=success');
-      });
-    });
+    const { token } = await this.customerAuthService.customerGoogleLogin(req.user);
+    res.redirect(`http://localhost:5173/customer?token=${token}`);
   }
 
   @UseGuards(FacebookAuthGuard)
