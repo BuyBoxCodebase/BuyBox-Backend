@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { OrderStatus } from '@prisma/client';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { PrismaService } from '../../prisma/prisma.service';
 
 @Injectable()
 export class AdminControlService {
@@ -140,6 +140,26 @@ export class AdminControlService {
                 take: limit,
                 orderBy: {
                     createdAt: 'desc'
+                },
+                select: {
+                    products: {
+                        select: {
+                            product: {
+                                select: {
+                                    brand: {
+                                        select: {
+                                            name: true,
+                                            user: {
+                                                select: {
+                                                    name: true
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }),
             this.prisma.order.count()
