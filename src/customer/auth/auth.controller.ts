@@ -1,4 +1,17 @@
-import { Controller, Post, Body, UseGuards, Req, Get, Redirect, Res, Patch, UseInterceptors, BadRequestException, UploadedFiles } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  Req,
+  Get,
+  Redirect,
+  Res,
+  Patch,
+  UseInterceptors,
+  BadRequestException,
+  UploadedFiles,
+} from '@nestjs/common';
 import { CustomerAuthService } from './auth.service';
 import { GoogleCustomerAuthGuard } from './guards/google-auth.guard';
 import { FacebookAuthGuard } from './guards/facebook-auth.guard';
@@ -6,18 +19,34 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 
 @Controller('customer/auth')
 export class CustomerAuthController {
-  constructor(
-    private readonly customerAuthService: CustomerAuthService,
-  ) { }
+  constructor(private readonly customerAuthService: CustomerAuthService) {}
 
   @Post('register')
-  async registerCustomer(@Body() body: { email: string; password: string; name: string; phoneNumber: string }) {
-    return this.customerAuthService.registerCustomer(body.email, body.password, body.name, body.phoneNumber);
+  async registerCustomer(
+    @Body()
+    body: {
+      email: string;
+      password: string;
+      name: string;
+      phoneNumber: string;
+    },
+  ) {
+    return this.customerAuthService.registerCustomer(
+      body.email,
+      body.password,
+      body.name,
+      body.phoneNumber,
+    );
   }
 
   @Post('verify')
-  async verifyCustomer(@Body() body: { activationToken: string; activationCode: string; }) {
-    return this.customerAuthService.verifyCustomer(body.activationToken, body.activationCode);
+  async verifyCustomer(
+    @Body() body: { activationToken: string; activationCode: string },
+  ) {
+    return this.customerAuthService.verifyCustomer(
+      body.activationToken,
+      body.activationCode,
+    );
   }
 
   @Post('login')
@@ -32,13 +61,15 @@ export class CustomerAuthController {
 
   @UseGuards(GoogleCustomerAuthGuard)
   @Get('google')
-  async googleAuthCustomer() { }
+  async googleAuthCustomer() {}
 
   @UseGuards(GoogleCustomerAuthGuard)
   @Get('google/callback')
   async googleAuthCallbackCustomer(@Req() req, @Res() res) {
-    const { token } = await this.customerAuthService.customerGoogleLogin(req.user);
-    res.redirect(`http://localhost:5173/customer?token=${token}`);
+    const { token } = await this.customerAuthService.customerGoogleLogin(
+      req.user,
+    );
+    res.redirect(`https://buybox1.co.za/customer?token=${token}`);
   }
 
   @UseGuards(FacebookAuthGuard)
