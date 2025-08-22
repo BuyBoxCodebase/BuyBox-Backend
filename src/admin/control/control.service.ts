@@ -150,6 +150,7 @@ export class AdminControlService {
                       user: {
                         select: {
                           name: true,
+                          phoneNumber: true,
                         },
                       },
                     },
