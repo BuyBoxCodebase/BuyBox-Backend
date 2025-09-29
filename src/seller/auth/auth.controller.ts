@@ -16,7 +16,7 @@ import { FilesInterceptor } from '@nestjs/platform-express';
 
 @Controller('seller/auth')
 export class SellerAuthController {
-  constructor(private readonly sellerAuthService: SellerAuthService) {}
+  constructor(private readonly sellerAuthService: SellerAuthService) { }
 
   @Post('/upload/images')
   @UseInterceptors(
@@ -71,14 +71,19 @@ export class SellerAuthController {
     return this.sellerAuthService.loginSeller(body.email, body.password);
   }
 
+  @Post('refresh')
+  async refreshToken(@Body() body: { refreshToken: string }) {
+    return this.sellerAuthService.refreshToken(body.refreshToken);
+  }
+
   @UseGuards(GoogleSellerAuthGuard)
   @Get('google')
-  async googleAuthSeller() {}
+  async googleAuthSeller() { }
 
   @UseGuards(GoogleSellerAuthGuard)
   @Get('google/callback')
   async googleAuthCallbackSeller(@Req() req, @Res() res) {
-    const { token } = await this.sellerAuthService.sellerGoogleLogin(req.user);
+    const { accessToken: token } = await this.sellerAuthService.sellerGoogleLogin(req.user);
     res.redirect(`https://seller.buybox1.co.za/seller?token=${token}`);
   }
 }

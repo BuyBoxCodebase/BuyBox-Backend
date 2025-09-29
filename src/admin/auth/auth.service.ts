@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { MailerService } from 'src/mailer/mailer.service';
@@ -38,11 +38,31 @@ export class AdminAuthService {
         });
 
         const payload: JwtPayload = { email: user.email, sub: user.id, role: user.role };
-        const token = this.jwtService.sign(payload);
+        const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+        const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
         return {
             user,
-            token,
+            accessToken,
+            refreshToken,
         };
+    }
+
+    async refreshToken(token: string) {
+        try {
+            const decoded = this.jwtService.verify(token);
+            const payload: JwtPayload = {
+                email: decoded.email,
+                sub: decoded.sub,
+                role: decoded.role
+            };
+            
+            const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+            const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+
+            return { accessToken, refreshToken };
+        } catch (error) {
+            throw new UnauthorizedException('Invalid or expired refresh token');
+        }
     }
 }

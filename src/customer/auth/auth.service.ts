@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
 import { CustomerActivationTokenPayload, JwtPayload } from './jwt-payload.interface';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -15,7 +16,22 @@ export class CustomerAuthService {
         private jwtService: JwtService,
         private readonly cloudinaryService: CloudinaryService,
         private readonly mailService: MailerService,
+        private readonly configService: ConfigService,
     ) { }
+
+    private generateAccessToken(payload: JwtPayload): string {
+        return this.jwtService.sign(payload, {
+            secret: this.configService.get<string>('JWT_SECRET'),
+            expiresIn: '15m',
+        });
+    }
+
+    private generateRefreshToken(payload: JwtPayload): string {
+        return this.jwtService.sign(payload, {
+            secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+            expiresIn: '7d',
+        });
+    }
 
     async registerCustomer(email: string, password: string, name: string, phoneNumber: string) {
         const hashedPassword = await argon2.hash(password);
@@ -84,11 +100,11 @@ export class CustomerAuthService {
         }
 
         const payload: JwtPayload = { email: user.email, sub: user.id, role: "CUSTOMER" };
-        const accessToken = this.jwtService.sign(payload);
+        const accessToken = this.generateAccessToken(payload);
+        const refreshToken = this.generateRefreshToken(payload);
 
-        return { user, accessToken };
+        return { user, accessToken, refreshToken };
     }
-
     async customerGoogleLogin(profile: any) {
         const user = await this.prisma.customer.upsert({
             where: { email: profile.emails[0].value },
@@ -103,11 +119,13 @@ export class CustomerAuthService {
         });
 
         const payload: JwtPayload = { email: user.email, sub: user.id, role: "CUSTOMER" };
-        const token = this.jwtService.sign(payload);
+        const accessToken = this.generateAccessToken(payload);
+        const refreshToken = this.generateRefreshToken(payload);
 
         return {
             user,
-            token,
+            accessToken,
+            refreshToken,
         };
     }
 
@@ -146,5 +164,23 @@ export class CustomerAuthService {
             photos: [{ value: payload.picture }],
             displayName: payload.name,
         });
+    }
+
+    async refreshToken(token: string) {
+        try {
+            const decoded = this.jwtService.verify(token);
+            const payload: JwtPayload = {
+                email: decoded.email,
+                sub: decoded.sub,
+                role: "CUSTOMER"
+            };
+
+            const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+            const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+
+            return { accessToken, refreshToken };
+        } catch (error) {
+            throw new UnauthorizedException('Invalid or expired refresh token');
+        }
     }
 }
