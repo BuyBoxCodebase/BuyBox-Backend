@@ -10,8 +10,8 @@ import { Roles, RolesGuard } from '../../libs/common/src';
 export class BrandController {
   constructor(private readonly brandService: BrandService) { }
 
-  // @UseGuards(JwtAuthGuard, RolesGuard)
-  // @Roles("SELLER")
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("SELLER")
   @UseInterceptors(FilesInterceptor('files', 5, {
     fileFilter(req, file, callback) {
       if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {

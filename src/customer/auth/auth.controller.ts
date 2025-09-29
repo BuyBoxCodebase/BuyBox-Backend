@@ -7,19 +7,15 @@ import {
   Get,
   Redirect,
   Res,
-  Patch,
-  UseInterceptors,
-  BadRequestException,
-  UploadedFiles,
 } from '@nestjs/common';
 import { CustomerAuthService } from './auth.service';
 import { GoogleCustomerAuthGuard } from './guards/google-auth.guard';
 import { FacebookAuthGuard } from './guards/facebook-auth.guard';
-import { FilesInterceptor } from '@nestjs/platform-express';
+import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 
 @Controller('customer/auth')
 export class CustomerAuthController {
-  constructor(private readonly customerAuthService: CustomerAuthService) {}
+  constructor(private readonly customerAuthService: CustomerAuthService) { }
 
   @Post('register')
   async registerCustomer(
@@ -54,6 +50,12 @@ export class CustomerAuthController {
     return this.customerAuthService.loginCustomer(body.email, body.password);
   }
 
+  @UseGuards(JwtRefreshGuard)
+  @Post('refresh')
+  async refreshTokens(@Req() req) {
+    return this.customerAuthService.refreshToken(req.user);
+  }
+
   @Post('google/mobile')
   async googleMobileAuth(@Body() body: { idToken: string }) {
     return this.customerAuthService.verifyGoogleIdToken(body.idToken);
@@ -61,12 +63,12 @@ export class CustomerAuthController {
 
   @UseGuards(GoogleCustomerAuthGuard)
   @Get('google')
-  async googleAuthCustomer() {}
+  async googleAuthCustomer() { }
 
   @UseGuards(GoogleCustomerAuthGuard)
   @Get('google/callback')
   async googleAuthCallbackCustomer(@Req() req, @Res() res) {
-    const { token } = await this.customerAuthService.customerGoogleLogin(
+    const { accessToken: token } = await this.customerAuthService.customerGoogleLogin(
       req.user,
     );
     res.redirect(`https://buybox1.co.za/customer?token=${token}`);

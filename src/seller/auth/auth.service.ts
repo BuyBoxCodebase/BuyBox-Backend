@@ -21,7 +21,7 @@ export class SellerAuthService {
     private jwtService: JwtService,
     private readonly cloudinaryService: CloudinaryService,
     private readonly mailService: MailerService,
-  ) {}
+  ) { }
 
   async uploadProfileImage(file: Array<Express.Multer.File>) {
     const images = await this.cloudinaryService.uploadImages(file);
@@ -131,9 +131,10 @@ export class SellerAuthService {
       sub: user.id,
       role: 'SELLER',
     };
-    const accessToken = this.jwtService.sign(payload);
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
-    return { user, accessToken };
+    return { user, accessToken, refreshToken };
   }
 
   async sellerGoogleLogin(profile: any) {
@@ -157,11 +158,33 @@ export class SellerAuthService {
       sub: user.id,
       role: 'SELLER',
     };
-    const token = this.jwtService.sign(payload);
+    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
 
     return {
       user,
-      token,
+      accessToken,
+      refreshToken,
     };
   }
+
+  async refreshToken(token: string) {
+    try {
+      const decoded = this.jwtService.verify(token);
+      const payload: JwtPayload = {
+        email: decoded.email,
+        sub: decoded.sub,
+        role: 'SELLER',
+      };
+
+      const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
+      const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+
+      return { accessToken, refreshToken };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
+    }
+  }
+
 }
+
