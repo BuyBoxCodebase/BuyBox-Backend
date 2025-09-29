@@ -83,7 +83,7 @@ export class SellerAuthController {
   @UseGuards(GoogleSellerAuthGuard)
   @Get('google/callback')
   async googleAuthCallbackSeller(@Req() req, @Res() res) {
-    const { accessToken: token } = await this.sellerAuthService.sellerGoogleLogin(req.user);
-    res.redirect(`https://seller.buybox1.co.za/seller?token=${token}`);
+    const { accessToken, refreshToken } = await this.sellerAuthService.sellerGoogleLogin(req.user);
+    res.redirect(`https://seller.buybox1.co.za/seller?accessToken=${accessToken}&refreshToken=${refreshToken}`);
   }
 }

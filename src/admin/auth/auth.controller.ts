@@ -20,7 +20,7 @@ import { GoogleAdminAuthGuard } from 'src/customer/auth/guards/google-auth.guard
 
 @Controller('admin/auth')
 export class AdminAuthController {
-  constructor(private readonly adminAuthService: AdminAuthService) {}
+  constructor(private readonly adminAuthService: AdminAuthService) { }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN', 'SUPER_ADMIN')
@@ -46,12 +46,12 @@ export class AdminAuthController {
 
   @UseGuards(GoogleAdminAuthGuard)
   @Get('google')
-  async googleAuth() {}
+  async googleAuth() { }
 
   @UseGuards(GoogleAdminAuthGuard)
   @Get('google/callback')
   async googleAuthCallback(@Req() req: Request, @Res() res: Response) {
-    const { token } = await this.adminAuthService.googleLogin(req.user);
-    res.redirect(`http://admin.buybox1.co.za/admin?token=${token}`);
+    const { accessToken, refreshToken } = await this.adminAuthService.googleLogin(req.user);
+    res.redirect(`http://admin.buybox1.co.za/admin?accessToken=${accessToken}&refreshToken=${refreshToken}`);
   }
 }
