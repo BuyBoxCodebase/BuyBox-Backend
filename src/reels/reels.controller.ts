@@ -2,6 +2,7 @@ import { BadRequestException, Body, Controller, Post, UploadedFiles, UseGuards, 
 import { ReelsService } from './reels.service';
 import { RolesGuard, Roles } from '../../libs/common/src';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { memoryStorage } from 'multer';
 import { JwtAuthGuard } from '../../src/seller/auth/guards/jwt-auth.guard';
 
 @Controller('reels')
@@ -11,6 +12,7 @@ export class ReelsController {
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("SELLER")
   @UseInterceptors(FilesInterceptor('files', 1, {
+    storage: memoryStorage(),
     fileFilter(req, file, callback) {
       if (!file.mimetype.match(/\/(mp4)$/)) {
         return callback(new BadRequestException('Only MP4 files are allowed!'), false);
