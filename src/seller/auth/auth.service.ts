@@ -168,12 +168,11 @@ export class SellerAuthService {
     };
   }
 
-  async refreshToken(token: string) {
+  async refreshToken(user:any) {
     try {
-      const decoded = this.jwtService.verify(token);
       const payload: JwtPayload = {
-        email: decoded.email,
-        sub: decoded.sub,
+        email: user.email,
+        sub: user.sub,
         role: 'SELLER',
       };
 

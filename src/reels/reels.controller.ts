@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Post, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ReelsService } from './reels.service';
 import { RolesGuard, Roles } from '../../libs/common/src';
 import { FilesInterceptor } from '@nestjs/platform-express';
@@ -30,5 +30,10 @@ export class ReelsController {
   @Post('/create')
   createProduct(@Body() body: any) {
     return this.reelsService.createReel(body);
+  }
+
+  @Get('/')
+  getReels() {
+    return this.reelsService.getReels();
   }
 }

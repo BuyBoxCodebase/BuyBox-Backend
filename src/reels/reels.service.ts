@@ -10,7 +10,7 @@ export class ReelsService {
     ) { }
 
     async uploadVideo(files: Array<Express.Multer.File>) {
-        return (await this.cloudinaryService.uploadImages(files));
+        return (await this.cloudinaryService.uploadVideos(files));
     }
 
     async createReel(
@@ -27,5 +27,10 @@ export class ReelsService {
         });
 
         return reel;
+    }
+
+    async getReels() {
+        const reels = await this.prisma.reel.findMany();
+        return reels;
     }
 }
