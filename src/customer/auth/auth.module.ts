@@ -10,6 +10,7 @@ import { FacebookStrategy } from './strategy/facebook.strategy';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { CloudinaryModule } from '../../cloudinary/cloudinary.module';
 import { MailerModule } from '../../mailer/mailer.module';
+import { JwtRefreshStrategy } from './strategy/jwt-refresh.strategy';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { MailerModule } from '../../mailer/mailer.module';
   providers: [
     ConfigService,
     JwtStrategy,
+    JwtRefreshStrategy,
     GoogleStrategyCustomer,
     GoogleStrategySeller,
     FacebookStrategy,

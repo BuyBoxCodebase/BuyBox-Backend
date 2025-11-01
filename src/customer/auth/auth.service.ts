@@ -82,9 +82,10 @@ export class CustomerAuthService {
                 },
             });
             const payload: JwtPayload = { email: user.email, sub: user.id, role: "CUSTOMER" };
-            const accessToken = this.jwtService.sign(payload);
+            const accessToken = this.generateAccessToken(payload);
+            const refreshToken = this.generateRefreshToken(payload);
 
-            return { user, accessToken };
+            return { user, accessToken, refreshToken };
         } catch (error) {
             throw new UnauthorizedException('Invalid or expired token');
         }
@@ -174,8 +175,8 @@ export class CustomerAuthService {
                 role: "CUSTOMER"
             };
 
-            const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
-            const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+            const accessToken = this.generateAccessToken(payload)
+            const refreshToken = this.generateRefreshToken(payload);
 
             return { accessToken, refreshToken };
         } catch (error) {
