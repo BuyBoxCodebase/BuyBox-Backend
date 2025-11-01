@@ -171,7 +171,7 @@ export class CustomerAuthService {
         try {
             const payload: JwtPayload = {
                 email: user.email,
-                sub: user.sub,
+                sub: user.userId,
                 role: "CUSTOMER"
             };
 

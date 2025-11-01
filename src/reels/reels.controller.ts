@@ -1,6 +1,6 @@
 import { BadRequestException, Body, Controller, Get, Post, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ReelsService } from './reels.service';
-import { RolesGuard, Roles } from '../../libs/common/src';
+import { RolesGuard, Roles, GetUser } from '../../libs/common/src';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { memoryStorage } from 'multer';
 import { JwtAuthGuard } from '../../src/seller/auth/guards/jwt-auth.guard';
@@ -35,5 +35,10 @@ export class ReelsController {
   @Get('/')
   getReels() {
     return this.reelsService.getReels();
+  }
+
+  @Get('/get-seller-reels')
+  getSellerReels(@GetUser('userId') sellerId: string) {
+    return this.reelsService.getReelsBySeller(sellerId);
   }
 }

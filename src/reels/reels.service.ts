@@ -33,4 +33,17 @@ export class ReelsService {
         const reels = await this.prisma.reel.findMany();
         return reels;
     }
+
+    async getReelsBySeller(sellerId: string) {
+        const reels = await this.prisma.reel.findMany({
+            where: {
+                product: {
+                    brand: {
+                        userId: sellerId
+                    }
+                }
+            }
+        });
+        return reels;
+    }
 }
