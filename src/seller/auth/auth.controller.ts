@@ -13,6 +13,7 @@ import {
 import { SellerAuthService } from './auth.service';
 import { GoogleSellerAuthGuard } from './guards/google-auth.guard';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 
 @Controller('seller/auth')
 export class SellerAuthController {
@@ -71,9 +72,10 @@ export class SellerAuthController {
     return this.sellerAuthService.loginSeller(body.email, body.password);
   }
 
+  @UseGuards(JwtRefreshGuard)
   @Post('refresh')
-  async refreshToken(@Body() body: { refreshToken: string }) {
-    return this.sellerAuthService.refreshToken(body.refreshToken);
+  async refreshToken(@Req() req: any) {
+    return this.sellerAuthService.refreshToken(req.user);
   }
 
   @UseGuards(GoogleSellerAuthGuard)

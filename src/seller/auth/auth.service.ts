@@ -13,6 +13,7 @@ import {
   JwtPayload,
   SellerActivationTokenPayload,
 } from './jwt-payload.interface';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class SellerAuthService {
@@ -21,6 +22,7 @@ export class SellerAuthService {
     private jwtService: JwtService,
     private readonly cloudinaryService: CloudinaryService,
     private readonly mailService: MailerService,
+    private readonly configService: ConfigService,
   ) { }
 
   async uploadProfileImage(file: Array<Express.Multer.File>) {
@@ -32,6 +34,20 @@ export class SellerAuthService {
       };
     });
     return urls;
+  }
+
+  private generateAccessToken(payload: JwtPayload): string {
+    return this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_SECRET'),
+      expiresIn: '15m',
+    });
+  }
+
+  private generateRefreshToken(payload: JwtPayload): string {
+    return this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      expiresIn: '7d',
+    });
   }
 
   async registerSeller(
@@ -99,7 +115,8 @@ export class SellerAuthService {
         sub: user.id,
         role: 'SELLER',
       };
-      const accessToken = this.jwtService.sign(payload);
+      const accessToken = this.generateAccessToken(payload)
+      const refreshToken = this.generateRefreshToken(payload);
 
       return {
         user: {
@@ -111,6 +128,7 @@ export class SellerAuthService {
           username: user.email,
         },
         accessToken,
+        refreshToken,
       };
     } catch (error) {
       throw new UnauthorizedException('Invalid or expired token');
@@ -131,8 +149,8 @@ export class SellerAuthService {
       sub: user.id,
       role: 'SELLER',
     };
-    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
-    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+    const accessToken = this.generateAccessToken(payload)
+    const refreshToken = this.generateRefreshToken(payload);
 
     return { user, accessToken, refreshToken };
   }
@@ -158,8 +176,8 @@ export class SellerAuthService {
       sub: user.id,
       role: 'SELLER',
     };
-    const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
-    const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+    const accessToken = this.generateAccessToken(payload)
+    const refreshToken = this.generateRefreshToken(payload);
 
     return {
       user,
@@ -168,16 +186,16 @@ export class SellerAuthService {
     };
   }
 
-  async refreshToken(user:any) {
+  async refreshToken(user: any) {
     try {
       const payload: JwtPayload = {
         email: user.email,
-        sub: user.sub,
+        sub: user.userId,
         role: 'SELLER',
       };
 
-      const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });
-      const refreshToken = this.jwtService.sign(payload, { expiresIn: '7d' });
+      const accessToken = this.generateAccessToken(payload)
+      const refreshToken = this.generateRefreshToken(payload);
 
       return { accessToken, refreshToken };
     } catch (error) {

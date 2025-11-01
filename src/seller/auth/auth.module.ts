@@ -9,6 +9,7 @@ import { CloudinaryModule } from 'src/cloudinary/cloudinary.module';
 import { MailerModule } from 'src/mailer/mailer.module';
 import { GoogleStrategySeller } from './strategy/google.strategy';
 import { JwtStrategy } from './strategy/jwt.strategy';
+import { JwtRefreshStrategy } from './strategy/jwt-refresh.strategy';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { JwtStrategy } from './strategy/jwt.strategy';
   providers: [
     ConfigService,
     JwtStrategy,
+    JwtRefreshStrategy,
     GoogleStrategySeller,
     SellerAuthService,
   ],
