@@ -19,7 +19,7 @@ export class RolesGuard implements CanActivate {
         const request = context.switchToHttp().getRequest();
         const user = request.user;
 
-        if (!user || !user.sub || !user.role) {
+        if (!user || !user.id || !user.role) {
             throw new UnauthorizedException('Invalid token payload');
         }
 
@@ -33,7 +33,7 @@ export class RolesGuard implements CanActivate {
                 break;
             case 'SELLER':
                 dbUser = await this.prisma.seller.findUnique({
-                    where: { id: user.sub }
+                    where: { id: user.id }
                 });
                 break;
             case 'ADMIN':
