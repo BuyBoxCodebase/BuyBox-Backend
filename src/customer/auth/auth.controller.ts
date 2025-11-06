@@ -71,7 +71,7 @@ export class CustomerAuthController {
     const { accessToken, refreshToken } = await this.customerAuthService.customerGoogleLogin(
       req.user,
     );
-    res.redirect(`https://buybox1.co.za/customer?accessToken=${accessToken}&refreshToken=${refreshToken}`);
+    res.redirect(`https://buyboxie.com/customer?accessToken=${accessToken}&refreshToken=${refreshToken}`);
   }
 
   @UseGuards(FacebookAuthGuard)
