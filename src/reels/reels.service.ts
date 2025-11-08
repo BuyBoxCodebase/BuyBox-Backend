@@ -30,7 +30,15 @@ export class ReelsService {
     }
 
     async getReels() {
-        const reels = await this.prisma.reel.findMany();
+        const reels = await this.prisma.reel.findMany({
+            include: {
+                product: {
+                    select: {
+                        basePrice: true,
+                    }
+                }
+            }
+        });
         return reels;
     }
 
