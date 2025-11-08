@@ -52,6 +52,6 @@ export class AdminAuthController {
   @Get('google/callback')
   async googleAuthCallback(@Req() req: Request, @Res() res: Response) {
     const { accessToken, refreshToken } = await this.adminAuthService.googleLogin(req.user);
-    res.redirect(`http://admin.buyboxie.com/admin?accessToken=${accessToken}&refreshToken=${refreshToken}`);
+    res.redirect(`https://admin.buyboxie.com/admin?accessToken=${accessToken}&refreshToken=${refreshToken}`);
   }
 }

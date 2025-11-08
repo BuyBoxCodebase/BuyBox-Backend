@@ -39,7 +39,7 @@ export class RolesGuard implements CanActivate {
             case 'ADMIN':
             case 'SUPER_ADMIN':
                 dbUser = await this.prisma.admin.findUnique({
-                    where: { id: user.sub }
+                    where: { id: user.id }
                 });
                 break;
             default:
