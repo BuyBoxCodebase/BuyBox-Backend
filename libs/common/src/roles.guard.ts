@@ -28,7 +28,7 @@ export class RolesGuard implements CanActivate {
         switch (user.role) {
             case 'CUSTOMER':
                 dbUser = await this.prisma.customer.findUnique({
-                    where: { id: user.sub }
+                    where: { id: user.id }
                 });
                 break;
             case 'SELLER':
