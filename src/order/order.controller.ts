@@ -1,11 +1,11 @@
 import { Controller, Get, Post, Body, Param, Delete, UseGuards } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { JwtAuthGuard } from '../customer/auth/guards/jwt-auth.guard';
 import { GetUser } from '../../libs/common/src/get-user.decorator';
 import { Roles, RolesGuard } from '../../libs/common/src';
-import { SessionAuthGuard } from '../../libs/shared/src';
 
-@UseGuards(SessionAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Controller('order')
 export class OrderController {
   constructor(private readonly orderService: OrderService) { }

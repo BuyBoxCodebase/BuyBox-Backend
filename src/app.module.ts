@@ -17,7 +17,7 @@ import { AdsModule } from './ads/ads.module';
 import { SellerModule } from './seller/seller.module';
 import { DeliveryAgentModule } from './delivery-agent/delivery-agent.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
-// import { NotificationsModule } from './notification/notification.module';
+import { ChatModule } from './chat/chat.module';
 
 @Module({
   imports: [
@@ -39,9 +39,9 @@ import { SchedulerModule } from './scheduler/scheduler.module';
     AnalyticsModule,
     DeliveryAgentModule,
     SchedulerModule,
-    // NotificationsModule,
+    ChatModule,
   ],
   controllers: [],
   providers: [],
 })
-export class AppModule { }
+export class AppModule {}

@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { CloudinaryService } from '../../src/cloudinary/cloudinary.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -483,6 +483,7 @@ export class ProductService {
   }
 
   async getProducts({ categoryId }: { categoryId?: string }) {
+    try{
     const products = await this.prisma.product.findMany({
       where: categoryId ? { categoryId } : {},
       include: {
@@ -550,6 +551,7 @@ export class ProductService {
         } : null,
         variants: simplifiedVariants
       };
+      
     });
 
     // Group products by category or subcategory
@@ -567,6 +569,11 @@ export class ProductService {
     }, {} as Record<string, typeof mappedProducts>);
 
     return groupedProducts;
+  }
+  catch(err){
+    console.error('Get products failed:', err);
+    throw new InternalServerErrorException('Failed to get products');
+  }
   }
 
   async getSellerProducts(userId: string) {
