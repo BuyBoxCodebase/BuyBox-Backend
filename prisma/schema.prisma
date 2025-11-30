@@ -77,7 +77,6 @@ model DeliveryAgent {
   password    String?
   profilePic  String?
   phoneNumber String?
-  // [latitude , longitude]
   googleId    String?
   facebookId  String?
   isCompleted Boolean @default(false)
@@ -128,8 +127,8 @@ model CartItem {
 model Category {
   id             String          @id @default(auto()) @map("_id") @db.ObjectId
   name           String
-  imageUrl       String
-  priority       Int             @default(0)
+  imageUrl       String           // kept — category thumbnails still useful
+  priority       Int              @default(0)
   products       Product[]
   subCategories  SubCategory[]
   advertisements Advertisement[]
@@ -151,7 +150,8 @@ model Product {
   brand          Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
   name           String
   description    String
-  images         String[]
+  videos         String[]         // replaced images[]
+  thumbnail      String?          // extracted from video or uploaded
   categoryId     String?          @db.ObjectId
   category       Category?        @relation(fields: [categoryId], references: [id])
   subCategoryId  String?          @db.ObjectId
@@ -165,7 +165,6 @@ model Product {
   options        ProductOption[]
   advertisements Advertisement[]
   conversations  Conversation[]
-  reels          Reel[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -211,7 +210,8 @@ model ProductVariant {
   description String?
   price       Float
   isDefault   Boolean         @default(false)
-  images      String[]
+  videos      String[]        // 🎥 replaced images[]
+  thumbnail   String?
   options     VariantOption[]
   inventory   Inventory[]
   cartItems   CartItem[]
@@ -422,19 +422,18 @@ model Advertisement {
   description    String?
   type           AdType
   placement      AdPlacement
-  content        Json // Flexible content structure based on ad type
+  content        Json
   targetType     AdTargetType @default(ALL_USERS)
-  targetConfig   Json? // Target configuration (interests, location, etc.)
+  targetConfig   Json?
   status         AdStatus     @default(DRAFT)
   startDate      DateTime
   endDate        DateTime?
-  priority       Int          @default(1) // Higher number = higher priority
-  maxImpressions Int? // Maximum number of times to show ad
-  maxClicks      Int? // Maximum clicks before ad is paused
-  budget         Float? // Budget for paid ads
-  createdById    String       @db.ObjectId // Admin who created the ad
+  priority       Int          @default(1)
+  maxImpressions Int?
+  maxClicks      Int?
+  budget         Float?
+  createdById    String       @db.ObjectId
 
-  // Associated items (optional relationships)
   productId  String?   @db.ObjectId
   product    Product?  @relation(fields: [productId], references: [id])
   categoryId String?   @db.ObjectId
@@ -442,23 +441,18 @@ model Advertisement {
   brandId    String?   @db.ObjectId
   brand      Brand?    @relation(fields: [brandId], references: [id])
 
-  // Media assets
-  mediaUrls String[] // Images, videos, or other media URLs
+  mediaUrls String[]
 
-  // Scheduling and conditions
-  scheduleConfig    Json? // For complex scheduling (specific days, times)
-  displayConditions Json? // Conditions for when to show the ad
+  scheduleConfig    Json?
+  displayConditions Json?
 
-  // Performance tracking
   impressions Int @default(0)
   clicks      Int @default(0)
   conversions Int @default(0)
 
-  // A/B testing
   isAbTest    Boolean @default(false)
   abTestGroup String?
 
-  // Relation to metrics
   metrics AdMetrics[]
 
   createdAt DateTime @default(now())
@@ -473,16 +467,12 @@ model AdMetrics {
   impressions     Int           @default(0)
   clicks          Int           @default(0)
   conversions     Int           @default(0)
-  ctr             Float? // Click-through rate
-  revenue         Float? // Revenue generated from this ad
-  cost            Float? // Cost of running this ad
-  roi             Float? // Return on investment
-
-  // Demographics of users who interacted (aggregated)
-  demographics Json?
-
-  // Custom metrics
-  customMetrics Json?
+  ctr             Float?
+  revenue         Float?
+  cost            Float?
+  roi             Float?
+  demographics    Json?
+  customMetrics   Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -538,12 +528,12 @@ model Message {
   conversationId String       @db.ObjectId
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   senderId       String       @db.ObjectId
-  senderType     String // "buyer" or "seller"
+  senderType     String
   content        String
   type           MessageType  @default(TEXT)
   isRead         Boolean      @default(false)
   readAt         DateTime?
-  metadata       Json? // For storing quick reply data, system message info, etc.
+  metadata       Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -553,7 +543,7 @@ model ChatNotification {
   id             String  @id @default(auto()) @map("_id") @db.ObjectId
   conversationId String  @db.ObjectId
   recipientId    String  @db.ObjectId
-  recipientType  String // "buyer" or "seller"
+  recipientType  String
   messageId      String  @db.ObjectId
   title          String
   body           String
@@ -568,26 +558,14 @@ model ChatReport {
   id             String    @id @default(auto()) @map("_id") @db.ObjectId
   conversationId String    @db.ObjectId
   reporterId     String    @db.ObjectId
-  reporterType   String // "buyer" or "seller"
+  reporterType   String
   reportedId     String    @db.ObjectId
-  reportedType   String // "buyer" or "seller"
+  reportedType   String
   reason         String
   description    String?
-  status         String    @default("PENDING") // PENDING, REVIEWED, RESOLVED
-  reviewedBy     String?   @db.ObjectId // Admin ID
+  status         String    @default("PENDING")
+  reviewedBy     String?   @db.ObjectId
   reviewedAt     DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model Reel {
-  id        String  @id @default(auto()) @map("_id") @db.ObjectId
-  productId String  @db.ObjectId
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-  caption   String
-  size      String?
-  videoUrl  String
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
