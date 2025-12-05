@@ -163,7 +163,8 @@ export class ProductService {
 
       return {
         success: true,
-        message: "New Product Added with Default Variant"
+        message: "New Product Added with Default Variant",
+        productId: result.id
       };
     } catch (error) {
       console.error('Transaction failed:', error);
