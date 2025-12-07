@@ -29,8 +29,9 @@ export class ReelsService {
         return reel;
     }
 
-    async getReels() {
+    async getReels({ subcategory }: { subcategory: string }) {
         const reels = await this.prisma.reel.findMany({
+            where: subcategory ? { product: { subCategoryId: subcategory } } : {},
             include: {
                 product: {
                     select: {

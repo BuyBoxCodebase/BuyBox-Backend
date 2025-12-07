@@ -1,4 +1,4 @@
-import { BadRequestException, Body, Controller, Get, Post, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Get, Post, Query, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ReelsService } from './reels.service';
 import { RolesGuard, Roles, GetUser } from '../../libs/common/src';
 import { FilesInterceptor } from '@nestjs/platform-express';
@@ -33,8 +33,8 @@ export class ReelsController {
   }
 
   @Get('/')
-  getReels() {
-    return this.reelsService.getReels();
+  getReels(@Query('subcategory') subcategory: string) {
+    return this.reelsService.getReels({ subcategory });
   }
 
   @Get('/get-seller-reels')
