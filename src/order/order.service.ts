@@ -382,8 +382,13 @@ export class OrderService {
                   select: {
                     name: true,
                   }
+                },
+                reels: {
+                  select: {
+                    size: true
+                  }
                 }
-              }
+              },
             },
             variant: {
               select: {
