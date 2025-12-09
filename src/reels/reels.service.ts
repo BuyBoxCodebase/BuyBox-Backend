@@ -36,6 +36,19 @@ export class ReelsService {
                 product: {
                     select: {
                         basePrice: true,
+                        variants: {
+                            include: {
+                                options: {
+                                    include: {
+                                        optionValue: {
+                                            include: {
+                                                option: true
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
