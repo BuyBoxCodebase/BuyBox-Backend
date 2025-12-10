@@ -113,6 +113,13 @@ export class ProductController {
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("SELLER")
+  @Delete('/delete')
+  deleteAllProduct(@GetUser("userId") userId: string) {
+    return this.productService.deleteAllProduct(userId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("SELLER")
   @Delete('/delete/:id')
   deleteProduct(@GetUser("userId") userId: string, @Param('id') id: string) {
     return this.productService.deleteProduct(userId, id);
