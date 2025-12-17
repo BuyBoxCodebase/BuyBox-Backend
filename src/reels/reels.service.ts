@@ -38,6 +38,9 @@ export class ReelsService {
                         basePrice: true,
                     }
                 }
+            },
+            orderBy: {
+                createdAt: "desc"
             }
         });
         return reels;

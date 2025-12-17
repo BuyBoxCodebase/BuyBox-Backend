@@ -510,6 +510,9 @@ export class ProductService {
             }
           }
         },
+        orderBy: {
+          createdAt: "desc"
+        }
       });
 
       // Map the products to include default variant details with simplified variants
