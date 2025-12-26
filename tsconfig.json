@@ -23,12 +23,6 @@
       ],
       "@app/common/*": [
         "libs/common/src/*"
-      ],
-      "@app/shared": [
-        "libs/shared/src"
-      ],
-      "@app/shared/*": [
-        "libs/shared/src/*"
       ]
     }
   }

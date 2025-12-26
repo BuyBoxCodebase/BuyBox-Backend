@@ -5,21 +5,17 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { JwtStrategy } from './strategy/jwt.strategy';
-import { GoogleStrategyCustomer } from './strategy/google.strategy';
+import { GoogleStrategyCustomer, GoogleStrategySeller } from './strategy/google.strategy';
 import { FacebookStrategy } from './strategy/facebook.strategy';
 import { PrismaModule } from '../../prisma/prisma.module';
 import { CloudinaryModule } from '../../cloudinary/cloudinary.module';
 import { MailerModule } from '../../mailer/mailer.module';
-import { LocalStrategy } from './strategy/local.strategy';
-import { SessionSerializer } from '@app/shared';
+import { JwtRefreshStrategy } from './strategy/jwt-refresh.strategy';
 
 @Module({
   imports: [
     PrismaModule,
-    PassportModule.register({
-      defaultStrategy: 'local',
-      session: true
-    }),
+    PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -34,11 +30,11 @@ import { SessionSerializer } from '@app/shared';
   providers: [
     ConfigService,
     JwtStrategy,
-    LocalStrategy,
+    JwtRefreshStrategy,
     GoogleStrategyCustomer,
+    GoogleStrategySeller,
     FacebookStrategy,
     CustomerAuthService,
-    SessionSerializer,
   ],
   controllers: [CustomerAuthController],
 })

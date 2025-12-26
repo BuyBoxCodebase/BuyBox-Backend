@@ -1,151 +1,207 @@
-import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { CloudinaryService } from '../../cloudinary/cloudinary.service';
-import { MailerService } from '../../mailer/mailer.service';
-import { PrismaService } from '../../prisma/prisma.service';
+import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
+import { MailerService } from 'src/mailer/mailer.service';
+import { PrismaService } from 'src/prisma/prisma.service';
 import * as argon2 from 'argon2';
 import { generateOTP } from '../../../libs/common/src';
-import { SellerActivationTokenPayload } from './jwt-payload.interface';
+import {
+  JwtPayload,
+  SellerActivationTokenPayload,
+} from './jwt-payload.interface';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class SellerAuthService {
-    constructor(
-        private prisma: PrismaService,
-        private jwtService: JwtService,
-        private readonly cloudinaryService: CloudinaryService,
-        private readonly mailService: MailerService,
-    ) { }
+  constructor(
+    private prisma: PrismaService,
+    private jwtService: JwtService,
+    private readonly cloudinaryService: CloudinaryService,
+    private readonly mailService: MailerService,
+    private readonly configService: ConfigService,
+  ) { }
 
-    async uploadProfileImage(file: Array<Express.Multer.File>) {
-        const images = (await this.cloudinaryService.uploadImages(file));
-        const urls = images.map((image) => {
-            return {
-                publicId: image.public_id,
-                url: image.url,
-            };
-        });
-        return urls;
+  async uploadProfileImage(file: Array<Express.Multer.File>) {
+    const images = await this.cloudinaryService.uploadImages(file);
+    const urls = images.map((image) => {
+      return {
+        publicId: image.public_id,
+        url: image.url,
+      };
+    });
+    return urls;
+  }
+
+  private generateAccessToken(payload: JwtPayload): string {
+    return this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_SECRET'),
+      expiresIn: '1d',
+    });
+  }
+
+  private generateRefreshToken(payload: JwtPayload): string {
+    return this.jwtService.sign(payload, {
+      secret: this.configService.get<string>('JWT_REFRESH_SECRET'),
+      expiresIn: '7d',
+    });
+  }
+
+  async registerSeller(
+    email: string,
+    password: string,
+    name: string,
+    phoneNumber: string,
+  ) {
+    const hashedPassword = await argon2.hash(password);
+
+    // Check if email already exists
+    const userExists = await this.prisma.seller.findUnique({
+      where: {
+        email: email,
+      },
+    });
+    if (userExists) {
+      throw new UnauthorizedException('Email already in use');
     }
 
-    async registerSeller(email: string, password: string, name: string) {
-        const hashedPassword = await argon2.hash(password);
+    const activationCode = generateOTP(6);
+    console.log(activationCode);
+    const payload: SellerActivationTokenPayload = {
+      email,
+      name,
+      password: hashedPassword,
+      code: activationCode,
+      phoneNumber,
+    };
+    const token = this.jwtService.sign(payload, { expiresIn: '10m' });
 
-        // Check if email already exists
-        const userExists = await this.prisma.seller.findUnique({
-            where: {
-                email: email,
-            }
-        });
-        if (userExists) {
-            throw new UnauthorizedException('Email already in use');
-        }
+    await this.mailService.sendMail({
+      email: email,
+      subject: 'Email Verification Mail',
+      mail_file: 'verification_mail.ejs',
+      data: {
+        otp: activationCode,
+      },
+    });
 
-        const activationCode = generateOTP(6);
-        console.log(activationCode);
-        const payload: SellerActivationTokenPayload = { email, name, password: hashedPassword, code: activationCode };
-        const token = this.jwtService.sign(payload, { expiresIn: '10m' });
+    return { activationToken: token };
+  }
 
-        await this.mailService.sendMail({
-            email: email,
-            subject: "Email Verification Mail",
-            mail_file: 'verification_mail.ejs',
-            data: {
-                otp: activationCode
-            }
-        });
+  async verifySeller(token: string, activationCode: string) {
+    try {
+      const decoded: SellerActivationTokenPayload =
+        this.jwtService.verify(token);
 
-        return { activationToken: token };
+      if (decoded.code !== activationCode) {
+        throw new BadRequestException('Invalid activation code');
+      }
+
+      // Create user after successful code verification
+      const user = await this.prisma.seller.create({
+        data: {
+          name: decoded.name,
+          email: decoded.email,
+          password: decoded.password,
+          phoneNumber: decoded.phoneNumber,
+          isCompleted: false,
+        },
+      });
+      const payload: JwtPayload = {
+        email: user.email,
+        sub: user.id,
+        role: 'SELLER',
+      };
+      const accessToken = this.generateAccessToken(payload)
+      const refreshToken = this.generateRefreshToken(payload);
+
+      return {
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          isCompleted: user.isCompleted,
+          profilePic: user.profilePic,
+          username: user.email,
+        },
+        accessToken,
+        refreshToken,
+      };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid or expired token');
+    }
+  }
+
+  async loginSeller(email: string, password: string) {
+    const user = await this.prisma.seller.findUnique({
+      where: { email },
+    });
+
+    if (!user || !(await argon2.verify(user.password, password))) {
+      throw new UnauthorizedException('Invalid credentials');
     }
 
-    async verifySeller(token: string, activationCode: string) {
-        try {
-            const decoded: SellerActivationTokenPayload = this.jwtService.verify(token);
+    const payload: JwtPayload = {
+      email: user.email,
+      sub: user.id,
+      role: 'SELLER',
+    };
+    const accessToken = this.generateAccessToken(payload)
+    const refreshToken = this.generateRefreshToken(payload);
 
-            if (decoded.code !== activationCode) {
-                throw new BadRequestException('Invalid activation code');
-            }
+    return { user, accessToken, refreshToken };
+  }
 
-            // Create user after successful code verification
-            const user = await this.prisma.seller.create({
-                data: {
-                    name: decoded.name,
-                    email: decoded.email,
-                    password: decoded.password,
-                    isCompleted: false,
-                },
-            });
+  async sellerGoogleLogin(profile: any) {
+    const user = await this.prisma.seller.upsert({
+      where: { email: profile.emails[0].value },
+      update: {
+        name: profile.displayName,
+        profilePic: profile.photos[0].value,
+      },
+      create: {
+        email: profile.emails[0].value,
+        googleId: profile.id,
+        name: profile.displayName,
+        profilePic: profile.photos[0].value,
+        isCompleted: false,
+      },
+    });
 
-            return {
-                user: {
-                    id: user.id,
-                    name: user.name,
-                    email: user.email,
-                    isCompleted: user.isCompleted,
-                    profilePic: user.profilePic,
-                    username: user.email,
-                },
-            };
-        } catch (error) {
-            throw new UnauthorizedException('Invalid or expired token');
-        }
+    const payload: JwtPayload = {
+      email: user.email,
+      sub: user.id,
+      role: 'SELLER',
+    };
+    const accessToken = this.generateAccessToken(payload)
+    const refreshToken = this.generateRefreshToken(payload);
+
+    return {
+      user,
+      accessToken,
+      refreshToken,
+    };
+  }
+
+  async refreshToken(user: any) {
+    try {
+      const payload: JwtPayload = {
+        email: user.email,
+        sub: user.userId,
+        role: 'SELLER',
+      };
+
+      const accessToken = this.generateAccessToken(payload)
+      const refreshToken = this.generateRefreshToken(payload);
+
+      return { accessToken, refreshToken };
+    } catch (error) {
+      throw new UnauthorizedException('Invalid or expired refresh token');
     }
+  }
 
-    async findUserByEmail(email: string) {
-        return this.prisma.seller.findUnique({
-            where: { email }
-        });
-    }
-
-    async validateUser(email: string, password: string) {
-        const user = await this.prisma.seller.findUnique({
-            where: { email },
-        });
-
-        if (!user || !(await argon2.verify(user.password, password))) {
-            throw new UnauthorizedException('Invalid credentials');
-        }
-
-        delete user.password;
-        delete user.googleId;
-        delete user.facebookId;
-        delete user.createdAt;
-        delete user.updatedAt;
-
-        return {
-            userId: user.id,
-            email: user.email,
-            role: "SELLER",
-            ...user
-        };
-    }
-
-    async sellerGoogleLogin(profile: any) {
-        const user = await this.prisma.seller.upsert({
-            where: { email: profile.emails[0].value },
-            update: { name: profile.displayName, profilePic: profile.photos[0].value },
-            create: {
-                email: profile.emails[0].value,
-                googleId: profile.id,
-                name: profile.displayName,
-                profilePic: profile.photos[0].value,
-                isCompleted: false,
-            },
-        });
-
-        return {
-            user,
-            userId: user.id,
-            email: user.email,
-            role: "SELLER",
-            profilePic: user.profilePic,
-            isCompleted: user.isCompleted,
-            twoFactorEnabled: user.twoFactorEnabled,
-            twoFactorSecret: user.twoFactorSecret,
-        };
-    }
-
-    async logout(req: any) {
-        req.session.destroy();
-        return { message: 'Logged out successfully' };
-    }
 }
+

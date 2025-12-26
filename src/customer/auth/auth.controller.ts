@@ -1,24 +1,48 @@
-import { Controller, Post, Body, UseGuards, Req, Get, Redirect, Res, Patch, UseInterceptors, BadRequestException, UploadedFiles } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  Req,
+  Get,
+  Redirect,
+  Res,
+} from '@nestjs/common';
 import { CustomerAuthService } from './auth.service';
 import { GoogleCustomerAuthGuard } from './guards/google-auth.guard';
 import { FacebookAuthGuard } from './guards/facebook-auth.guard';
-import { FilesInterceptor } from '@nestjs/platform-express';
-import { SessionAuthGuard } from '@app/shared';
+import { JwtRefreshGuard } from './guards/jwt-refresh.guard';
 
 @Controller('customer/auth')
 export class CustomerAuthController {
-  constructor(
-    private readonly customerAuthService: CustomerAuthService,
-  ) { }
+  constructor(private readonly customerAuthService: CustomerAuthService) { }
 
   @Post('register')
-  async registerCustomer(@Body() body: { email: string; password: string; name: string; phoneNumber: string }) {
-    return this.customerAuthService.registerCustomer(body.email, body.password, body.name, body.phoneNumber);
+  async registerCustomer(
+    @Body()
+    body: {
+      email: string;
+      password: string;
+      name: string;
+      phoneNumber: string;
+    },
+  ) {
+    return this.customerAuthService.registerCustomer(
+      body.email,
+      body.password,
+      body.name,
+      body.phoneNumber,
+    );
   }
 
   @Post('verify')
-  async verifyCustomer(@Body() body: { activationToken: string; activationCode: string; }) {
-    return this.customerAuthService.verifyCustomer(body.activationToken, body.activationCode);
+  async verifyCustomer(
+    @Body() body: { activationToken: string; activationCode: string },
+  ) {
+    return this.customerAuthService.verifyCustomer(
+      body.activationToken,
+      body.activationCode,
+    );
   }
 
   @Post('login')
@@ -26,11 +50,12 @@ export class CustomerAuthController {
     return this.customerAuthService.loginCustomer(body.email, body.password);
   }
 
-  @UseGuards(SessionAuthGuard)
-  @Post('logout')
-  async logout(@Req() req) {
-    return this.customerAuthService.logoutCustomer(req);
+  @UseGuards(JwtRefreshGuard)
+  @Post('refresh')
+  async refreshTokens(@Req() req) {
+    return this.customerAuthService.refreshToken(req.user);
   }
+
   @Post('google/mobile')
   async googleMobileAuth(@Body() body: { idToken: string }) {
     return this.customerAuthService.verifyGoogleIdToken(body.idToken);
@@ -43,28 +68,11 @@ export class CustomerAuthController {
   @UseGuards(GoogleCustomerAuthGuard)
   @Get('google/callback')
   async googleAuthCallbackCustomer(@Req() req, @Res() res) {
-    req.login(req.user, (err) => {
-      if (err) {
-        console.error('Login error:', err);
-        return res.redirect('http://localhost:5173/customer?auth=error');
-      }
+    const { accessToken, refreshToken } = await this.customerAuthService.customerGoogleLogin(
+      req.user,
+    );
 
-      console.log('User logged in, session:', req.session);
-
-      // Force session save
-      req.session.save((err) => {
-        if (err) {
-          console.error('Session save error:', err);
-          return res.redirect('http://localhost:5173/customer?auth=failed');
-        }
-
-        if (!req.user.isCompleted) {
-          return res.redirect('http://localhost:5173/customer?auth=pending');
-        }
-
-        return res.redirect('http://localhost:5173/customer?auth=success');
-      });
-    });
+    res.redirect(`https://buyboxie.com/customer?accessToken=${accessToken}&refreshToken=${refreshToken}`);
   }
 
   @UseGuards(FacebookAuthGuard)
