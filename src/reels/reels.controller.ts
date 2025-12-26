@@ -17,10 +17,12 @@ export class ReelsController {
       fileSize: 150 * 1024 * 1024, // 150 MB max file size
     },
     fileFilter(req, file, callback) {
-      if (!file.mimetype.match(/\/(mp4|webm|quicktime|x-msvideo)$/)) {
-        return callback(new BadRequestException('Only video files (MP4, WebM, MOV, AVI) are allowed! 1080p and 720p resolutions are supported.'), false);
+      if (!file.mimetype.match(/^video\/(mp4|webm|quicktime|x-msvideo|mpeg|avi)$/i)) {
+        return callback(
+          new BadRequestException('Only video files (MP4, WebM, MOV, AVI) are allowed! 1080p and 720p resolutions are supported.'),
+          false
+        );
       }
-      callback(null, true);
     },
   }))
   @Post("/upload/images")
