@@ -96,7 +96,16 @@ export class CustomerAuthService {
             where: { email },
         });
 
-        if (!user || !(await argon2.verify(user.password, password))) {
+        if (!user) {
+            throw new UnauthorizedException('Invalid credentials');
+        }
+
+        // Social-signup accounts have no password; argon2.verify would throw on null.
+        if (!user.password) {
+            throw new UnauthorizedException('This account was created with Google Sign-In. Please continue with Google.');
+        }
+
+        if (!(await argon2.verify(user.password, password))) {
             throw new UnauthorizedException('Invalid credentials');
         }
 
