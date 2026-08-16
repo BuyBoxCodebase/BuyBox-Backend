@@ -279,6 +279,7 @@ enum OrderStatus {
   PROCESSING
   COMPLETED
   CANCELED
+  OUT_OF_STOCK
 }
 
 model Notification {

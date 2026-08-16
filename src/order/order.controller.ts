@@ -1,6 +1,7 @@
-import { Controller, Get, Post, Body, Param, Delete, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Body, Param, Delete, UseGuards } from '@nestjs/common';
 import { OrderService } from './order.service';
 import { CreateOrderDto } from './dto/create-order.dto';
+import { UpdateOrderStatusDto } from './dto/update-order-status.dto';
 import { JwtAuthGuard } from '../customer/auth/guards/jwt-auth.guard';
 import { GetUser } from '../../libs/common/src/get-user.decorator';
 import { Roles, RolesGuard } from '../../libs/common/src';
@@ -32,6 +33,16 @@ export class OrderController {
   @Get('/seller/get-orders')
   getSellerOrders(@GetUser("userId") userId: string) {
     return this.orderService.getSellerOrders(userId);
+  }
+
+  @Roles("SELLER")
+  @Patch('/seller/update-status/:id')
+  updateSellerOrderStatus(
+    @GetUser("userId") userId: string,
+    @Param('id') orderId: string,
+    @Body() updateOrderStatusDto: UpdateOrderStatusDto,
+  ) {
+    return this.orderService.updateSellerOrderStatus(userId, orderId, updateOrderStatusDto.status);
   }
 
   @Roles("CUSTOMER")
