@@ -72,7 +72,8 @@ export class CustomerAuthController {
       req.user,
     );
 
-    res.redirect(`https://buyboxie.com/customer?accessToken=${accessToken}&refreshToken=${refreshToken}`);
+    const frontendUrl = process.env.CUSTOMER_FRONTEND_URL || 'https://buyboxie.com';
+    res.redirect(`${frontendUrl}/customer?accessToken=${accessToken}&refreshToken=${refreshToken}`);
   }
 
   @UseGuards(FacebookAuthGuard)
