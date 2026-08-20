@@ -1,4 +1,5 @@
 import { BadRequestException, Body, Controller, Delete, Get, Patch, Post, UploadedFiles, UseGuards, UseInterceptors } from '@nestjs/common';
+import { CacheInterceptor, CacheKey, CacheTTL } from '@nestjs/cache-manager';
 import { CategoryService } from './category.service';
 import { JwtAuthGuard } from '../customer/auth/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../../libs/common/src';
@@ -66,11 +67,17 @@ export class CategoryController {
   }
 
   @Get("/get")
+  @UseInterceptors(CacheInterceptor)
+  @CacheKey('categories')
+  @CacheTTL(3600000)
   getCategories() {
     return this.categoryService.getCategories();
   }
 
   @Get("/get/sub-categories")
+  @UseInterceptors(CacheInterceptor)
+  @CacheKey('sub-categories')
+  @CacheTTL(3600000)
   getSubCategories() {
     return this.categoryService.getSubCategories();
   }

@@ -1,4 +1,6 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject } from '@nestjs/common';
+import { CACHE_MANAGER } from '@nestjs/cache-manager';
+import { Cache } from 'cache-manager';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -6,8 +8,34 @@ import { PrismaService } from '../prisma/prisma.service';
 export class CategoryService {
     constructor(
         private readonly prisma: PrismaService,
-        private readonly cloudinaryService: CloudinaryService
+        private readonly cloudinaryService: CloudinaryService,
+        @Inject(CACHE_MANAGER) private cacheManager: Cache
     ) { }
+
+    private async invalidateCaches() {
+        // Clear Redis cache (with try/catch for resilience)
+        try {
+            await this.cacheManager.del('categories');
+            await this.cacheManager.del('sub-categories');
+        } catch (e) {
+            console.error("Failed to clear backend cache:", e);
+        }
+        
+        // Ping Next.js frontend webhook to clear its cache
+        try {
+            const customerWebUrl = process.env.CUSTOMER_WEB_URL;
+            const secret = process.env.REVALIDATION_SECRET;
+            
+            // fire and forget
+            fetch(`${customerWebUrl}/api/revalidate`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tag: 'categories', secret })
+            });
+        } catch (error) {
+            console.error("Failed to revalidate Next.js cache", error);
+        }
+    }
 
     async uploadProfileImage(file: Array<Express.Multer.File>) {
         const images = (await this.cloudinaryService.uploadImages(file));
@@ -28,6 +56,7 @@ export class CategoryService {
                 ...(priority ? { priority } : {})
             }
         });
+        await this.invalidateCaches();
         return category;
     }
 
@@ -40,6 +69,7 @@ export class CategoryService {
                 ...(priority ? { priority } : {})
             }
         });
+        await this.invalidateCaches();
         return category;
     }
 
@@ -54,6 +84,7 @@ export class CategoryService {
                 ...(priority ? { priority } : {})
             }
         });
+        await this.invalidateCaches();
         return category;
     }
 
@@ -69,6 +100,7 @@ export class CategoryService {
                 ...(priority ? { priority } : {})
             }
         });
+        await this.invalidateCaches();
         return category;
     }
 
@@ -78,6 +110,7 @@ export class CategoryService {
                 id: categoryId,
             }
         });
+        await this.invalidateCaches();
         return category;
     }
 
@@ -87,6 +120,7 @@ export class CategoryService {
                 id: subCategoryId,
             },
         });
+        await this.invalidateCaches();
         return category;
     }
 
