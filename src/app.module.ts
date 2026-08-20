@@ -19,6 +19,7 @@ import { DeliveryAgentModule } from './delivery-agent/delivery-agent.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { ChatModule } from './chat/chat.module';
 import { ReelsModule } from './reels/reels.module';
+import { RecommendationModule } from './recommendation/recommendation.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { ReelsModule } from './reels/reels.module';
     SchedulerModule,
     ChatModule,
     ReelsModule,
+    RecommendationModule,
   ],
   controllers: [],
   providers: [],
