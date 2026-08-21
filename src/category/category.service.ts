@@ -31,6 +31,8 @@ export class CategoryService {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ tag: 'categories', secret })
+            }).catch(error => {
+                console.error("Failed to revalidate Next.js cache (async error)", error);
             });
         } catch (error) {
             console.error("Failed to revalidate Next.js cache", error);
