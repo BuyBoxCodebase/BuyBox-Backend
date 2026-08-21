@@ -21,9 +21,27 @@ import { ChatModule } from './chat/chat.module';
 import { ReelsModule } from './reels/reels.module';
 import { RecommendationModule } from './recommendation/recommendation.module';
 
+import { CacheModule } from '@nestjs/cache-manager';
+import { createKeyv } from '@keyv/redis';
+
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    CacheModule.registerAsync({
+      isGlobal: true,
+      useFactory: async () => {
+        if (process.env.REDIS_URL) {
+          try {
+            const store = createKeyv(process.env.REDIS_URL);
+            console.log('Connected to Redis Cache');
+            return { stores: [store] };
+          } catch (error) {
+            console.error('Failed to connect to Redis, falling back to in-memory cache:', error);
+          }
+        }
+        return {}; // Fallback to default in-memory cache
+      },
+    }),
     PrismaModule,
     AdminModule,
     SellerModule,

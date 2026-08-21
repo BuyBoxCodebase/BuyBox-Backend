@@ -86,6 +86,7 @@ export class SellerAuthController {
   @Get('google/callback')
   async googleAuthCallbackSeller(@Req() req, @Res() res) {
     const { accessToken, refreshToken } = await this.sellerAuthService.sellerGoogleLogin(req.user);
-    res.redirect(`https://seller.buyboxie.com/seller?accessToken=${accessToken}&refreshToken=${refreshToken}`);
+    const frontendUrl = process.env.SELLER_FRONTEND_URL || 'https://seller.buyboxie.com';
+    res.redirect(`${frontendUrl}/seller?accessToken=${accessToken}&refreshToken=${refreshToken}`);
   }
 }

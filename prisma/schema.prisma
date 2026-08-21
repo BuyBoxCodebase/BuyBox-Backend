@@ -133,6 +133,8 @@ model Category {
   products       Product[]
   subCategories  SubCategory[]
   advertisements Advertisement[]
+
+  @@index([priority])
 }
 
 model SubCategory {
@@ -143,6 +145,9 @@ model SubCategory {
   categoryId String    @db.ObjectId
   category   Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   products   Product[]
+
+  @@index([categoryId])
+  @@index([priority])
 }
 
 model Product {
