@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailerService } from '../../src/mailer/mailer.service';
@@ -455,6 +455,84 @@ export class OrderService {
     });
 
     return transformedOrders;
+  }
+
+  // A seller acts on a PENDING order from their dashboard: PROCESSING accepts it,
+  // OUT_OF_STOCK rejects it and returns the reserved stock. No other transition is
+  // seller-settable — COMPLETED is the delivery flow's, CANCELED is the customer's.
+  private static readonly SELLER_SETTABLE_STATUSES: OrderStatus[] = [
+    OrderStatus.PROCESSING,
+    OrderStatus.OUT_OF_STOCK,
+  ];
+
+  async updateSellerOrderStatus(userId: string, orderId: string, status: OrderStatus) {
+    if (!OrderService.SELLER_SETTABLE_STATUSES.includes(status)) {
+      throw new BadRequestException(
+        `Status must be one of: ${OrderService.SELLER_SETTABLE_STATUSES.join(', ')}`
+      );
+    }
+
+    return await this.prisma.$transaction(async (prisma) => {
+      // Scoped to this seller's brand, so one seller cannot act on another's order.
+      const order = await prisma.order.findFirst({
+        where: {
+          id: orderId,
+          products: {
+            some: {
+              product: {
+                brand: {
+                  userId: userId
+                }
+              }
+            }
+          }
+        },
+        include: {
+          products: true
+        }
+      });
+
+      if (!order) {
+        throw new NotFoundException("Order not found");
+      }
+
+      if (order.status !== OrderStatus.PENDING) {
+        throw new BadRequestException(
+          `Only pending orders can be updated. This order is already ${order.status}.`
+        );
+      }
+
+      // Rejecting the order releases every reserved unit, matching cancelOrder.
+      if (status === OrderStatus.OUT_OF_STOCK) {
+        for (const item of order.products) {
+          const inventory = await prisma.inventory.findFirst({
+            where: item.variantId
+              ? { variantId: item.variantId }
+              : { productId: item.productId }
+          });
+
+          if (inventory) {
+            await prisma.inventory.update({
+              where: { id: inventory.id },
+              data: { quantity: inventory.quantity + item.quantity }
+            });
+          }
+        }
+      }
+
+      const updatedOrder = await prisma.order.update({
+        where: { id: orderId },
+        data: { status }
+      });
+
+      return {
+        success: true,
+        message: status === OrderStatus.PROCESSING
+          ? "Order accepted"
+          : "Order marked as out of stock",
+        order: updatedOrder
+      };
+    });
   }
 
   async cancelOrder(userId: string, orderId: string) {

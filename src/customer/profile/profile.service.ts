@@ -32,6 +32,7 @@ export class CustomerProfileService {
                 profilePic: true,
                 username: true,
                 isCompleted: true,
+                interests: true,
             }
         });
 
@@ -68,6 +69,35 @@ export class CustomerProfileService {
             message: "Update Customer details",
             userId: updatedCustomer.id
         }
+    }
+
+    async updateInterests(userId: string, categoryIds: string[]) {
+        if (!Array.isArray(categoryIds)) {
+            return { success: false, message: "categoryIds must be an array" };
+        }
+
+        // only persist ids that map to a real category, so interests always
+        // stay joinable against Category and ad targeting keeps matching
+        const valid = await this.prisma.category.findMany({
+            where: { id: { in: categoryIds } },
+            select: { id: true },
+        });
+        const interests = valid.map((c) => c.id);
+
+        if (interests.length === 0) {
+            return { success: false, message: "No valid categories provided" };
+        }
+
+        await this.prisma.customer.update({
+            where: { id: userId },
+            data: { interests },
+        });
+
+        return {
+            success: true,
+            message: "Interests updated",
+            interests,
+        };
     }
 
     async setCustomerOrderPreference() { }

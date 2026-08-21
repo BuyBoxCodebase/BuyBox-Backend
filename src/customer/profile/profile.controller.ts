@@ -27,6 +27,12 @@ export class CustomerProfileController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Patch("interests")
+  async updateInterests(@Req() req, @Body() body: { categoryIds: string[] }) {
+    return this.customerProfileService.updateInterests(req.user.userId, body?.categoryIds ?? []);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Patch("update-profile")
   async updateCustomer(@Req() req, @Body() body) {
     return this.customerProfileService.updateCustomerDetails(req.user.userId, body);
