@@ -1,46 +1,31 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import * as session from 'express-session';
-import * as MongoDBStore from 'connect-mongodb-session';
-import * as passport from 'passport';
-import * as cookieParser from 'cookie-parser';
-import { ConfigService } from '@nestjs/config';
+
+// Exact origins plus Vercel preview deploys. Apex is listed alongside www:
+// the page redirects apex -> www, but a request already issued from the apex
+// origin is still checked against this list.
+const ALLOWED_ORIGINS = [
+  'https://buyboxie.com',
+  'https://www.buyboxie.com',
+  'https://seller.buyboxie.com',
+  'https://admin.buyboxie.com',
+  'http://localhost:5173',
+  'http://localhost:3000',
+];
+
+const PREVIEW_ORIGIN = /^https:\/\/[a-z0-9-]+\.vercel\.app$/;
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const configService = app.get(ConfigService);
-
-  // Configure Sessions
-  const MongoStore = MongoDBStore(session);
-  const store = new MongoStore({
-    uri: configService.get<string>('DATABASE_URL'),
-    collection: 'sessions',
-  });
-
-  // Configure session middleware
-  app.use(
-    session({
-      secret: configService.get<string>('SESSION_SECRET') || 'your-secret-key',
-      resave: false,
-      saveUninitialized: false,
-      name: "buybox-session",
-      cookie: {
-        maxAge: 1000 * 60 * 60 * 24 * 7,
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: "lax",
-      },
-      store: store,
-    }),
-  );
-
-  // Initialize passport and session
-  app.use(passport.initialize());
-  app.use(passport.session());
-  app.use(cookieParser());
-
   app.enableCors({
-    origin: ['https://buybox-seller-site.vercel.app', 'https://emporiumsc.co.za', 'https://buy-box-seven.vercel.app', 'https://buy-box-git-dev-snaju003s-projects.vercel.app', 'https://www.buybox1.co.za', 'https://seller.buybox1.co.za', 'https://admin.buybox1.co.za', 'http://localhost:5173'],
+    origin(origin, callback) {
+      // No Origin header: server-to-server, curl, same-origin. Not a CORS request.
+      if (!origin) return callback(null, true);
+      const ok = ALLOWED_ORIGINS.includes(origin) || PREVIEW_ORIGIN.test(origin);
+      // Reject by omitting the header rather than throwing, so the browser
+      // reports a clean CORS block instead of a 500.
+      callback(null, ok);
+    },
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,

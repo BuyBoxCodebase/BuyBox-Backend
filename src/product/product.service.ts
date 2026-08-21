@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { CloudinaryService } from '../../src/cloudinary/cloudinary.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { CreateProductDto } from './dto/create-product.dto';
@@ -163,7 +163,8 @@ export class ProductService {
 
       return {
         success: true,
-        message: "New Product Added with Default Variant"
+        message: "New Product Added with Default Variant",
+        productId: result.id
       };
     } catch (error) {
       console.error('Transaction failed:', error);
@@ -483,90 +484,100 @@ export class ProductService {
   }
 
   async getProducts({ categoryId }: { categoryId?: string }) {
-    const products = await this.prisma.product.findMany({
-      where: categoryId ? { categoryId } : {},
-      include: {
-        category: true,
-        subCategory: true,
-        inventory: {
-          select: {
-            quantity: true,
-          }
-        },
-        variants: {
-          include: {
-            inventory: true,
-            options: {
-              include: {
-                optionValue: {
-                  include: {
-                    option: true
+    try {
+      const products = await this.prisma.product.findMany({
+        where: categoryId ? { categoryId } : {},
+        include: {
+          category: true,
+          subCategory: true,
+          inventory: {
+            select: {
+              quantity: true,
+            }
+          },
+          variants: {
+            include: {
+              inventory: true,
+              options: {
+                include: {
+                  optionValue: {
+                    include: {
+                      option: true
+                    }
                   }
                 }
               }
             }
           }
+        },
+        orderBy: {
+          createdAt: "desc"
         }
-      },
-    });
-
-    // Map the products to include default variant details with simplified variants
-    const mappedProducts = products.map(product => {
-      const defaultVariant = product.variants.find(v => v.isDefault) || product.variants[0] || null;
-
-      // Simplified variants with only id, formattedOptions, price and inventory quantity
-      const simplifiedVariants = product.variants.map(variant => {
-        // Organize the variant options by option name
-        const formattedOptions = variant.options.reduce((acc, opt) => {
-          const optionName = opt.optionValue.option.name;
-          acc[optionName] = {
-            id: opt.optionValueId,
-            value: opt.optionValue.value,
-            optionId: opt.optionValue.optionId
-          };
-          return acc;
-        }, {} as Record<string, { id: string, value: string, optionId: string }>);
-
-        return {
-          id: variant.id,
-          price: variant.price,
-          quantity: variant.inventory && variant.inventory.length > 0 ? variant.inventory[0].quantity : 0,
-          formattedOptions
-        };
       });
 
-      return {
-        ...product,
-        price: defaultVariant?.price || product.basePrice,
-        inventory: defaultVariant?.inventory && defaultVariant.inventory.length > 0
-          ? { quantity: defaultVariant.inventory[0].quantity }
-          : (product.inventory && product.inventory.length > 0 ? { quantity: product.inventory[0].quantity } : { quantity: 0 }),
-        defaultVariant: defaultVariant ? {
-          id: defaultVariant.id,
-          price: defaultVariant.price,
-          quantity: defaultVariant.inventory && defaultVariant.inventory.length > 0
-            ? defaultVariant.inventory[0].quantity
-            : 0,
-        } : null,
-        variants: simplifiedVariants
-      };
-    });
+      // Map the products to include default variant details with simplified variants
+      const mappedProducts = products.map(product => {
+        const defaultVariant = product.variants.find(v => v.isDefault) || product.variants[0] || null;
 
-    // Group products by category or subcategory
-    const groupedProducts = mappedProducts.reduce((acc, product) => {
-      // Determine grouping key based on whether categoryId is provided
-      const groupKey = categoryId
-        ? (product.subCategory?.name || 'Uncategorized')
-        : (product.category?.name || 'Uncategorized');
+        // Simplified variants with only id, formattedOptions, price and inventory quantity
+        const simplifiedVariants = product.variants.map(variant => {
+          // Organize the variant options by option name
+          const formattedOptions = variant.options.reduce((acc, opt) => {
+            const optionName = opt.optionValue.option.name;
+            acc[optionName] = {
+              id: opt.optionValueId,
+              value: opt.optionValue.value,
+              optionId: opt.optionValue.optionId
+            };
+            return acc;
+          }, {} as Record<string, { id: string, value: string, optionId: string }>);
 
-      if (!acc[groupKey]) {
-        acc[groupKey] = [];
-      }
-      acc[groupKey].push(product);
-      return acc;
-    }, {} as Record<string, typeof mappedProducts>);
+          return {
+            id: variant.id,
+            price: variant.price,
+            quantity: variant.inventory && variant.inventory.length > 0 ? variant.inventory[0].quantity : 0,
+            formattedOptions
+          };
+        });
 
-    return groupedProducts;
+        return {
+          ...product,
+          price: defaultVariant?.price || product.basePrice,
+          inventory: defaultVariant?.inventory && defaultVariant.inventory.length > 0
+            ? { quantity: defaultVariant.inventory[0].quantity }
+            : (product.inventory && product.inventory.length > 0 ? { quantity: product.inventory[0].quantity } : { quantity: 0 }),
+          defaultVariant: defaultVariant ? {
+            id: defaultVariant.id,
+            price: defaultVariant.price,
+            quantity: defaultVariant.inventory && defaultVariant.inventory.length > 0
+              ? defaultVariant.inventory[0].quantity
+              : 0,
+          } : null,
+          variants: simplifiedVariants
+        };
+
+      });
+
+      // Group products by category or subcategory
+      const groupedProducts = mappedProducts.reduce((acc, product) => {
+        // Determine grouping key based on whether categoryId is provided
+        const groupKey = categoryId
+          ? (product.subCategory?.name || 'Uncategorized')
+          : (product.category?.name || 'Uncategorized');
+
+        if (!acc[groupKey]) {
+          acc[groupKey] = [];
+        }
+        acc[groupKey].push(product);
+        return acc;
+      }, {} as Record<string, typeof mappedProducts>);
+
+      return groupedProducts;
+    }
+    catch (err) {
+      console.error('Get products failed:', err);
+      throw new InternalServerErrorException('Failed to get products');
+    }
   }
 
   async getSellerProducts(userId: string) {
@@ -604,6 +615,9 @@ export class ProductService {
             }
           }
         }
+      },
+      orderBy: {
+        createdAt: "desc"
       }
     });
 
@@ -987,6 +1001,21 @@ export class ProductService {
     return {
       success: true,
       message: "Updated the product successfully"
+    };
+  }
+
+  async deleteAllProduct(userId: string) {
+    const deletedProduct = await this.prisma.product.deleteMany({
+      where: {
+        brand: {
+          userId: userId
+        }
+      }
+    });
+
+    return {
+      success: true,
+      message: "All Product have been deleted"
     };
   }
 

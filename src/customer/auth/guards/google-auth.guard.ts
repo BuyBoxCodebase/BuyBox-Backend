@@ -1,22 +1,12 @@
-import { ExecutionContext, Injectable } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 
 @Injectable()
-export class GoogleCustomerAuthGuard extends AuthGuard('google-customer') {
-    async canActivate(context: ExecutionContext) {
-        const result = (await super.canActivate(context)) as boolean;
-        const request = context.switchToHttp().getRequest();
+export class GoogleCustomerAuthGuard extends AuthGuard('google-customer') { }
 
-        await new Promise<void>((resolve, reject) => {
-            request.session.save((err) => {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve();
-                }
-            });
-        });
 
-        return result;
-    }
-}
+@Injectable()
+export class GoogleSellerAuthGuard extends AuthGuard('google-seller') { }
+
+@Injectable()
+export class GoogleAdminAuthGuard extends AuthGuard('google-admin') { }

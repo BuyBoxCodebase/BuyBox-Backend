@@ -24,4 +24,22 @@ export class CloudinaryService {
         })
         return Promise.all(promises);
     }
+
+    async uploadVideos(
+        files: Array<Express.Multer.File>,
+    ): Promise<(UploadApiResponse | UploadApiErrorResponse)[]> {
+        const promises = files.map((file: Express.Multer.File) => {
+            return new Promise<UploadApiResponse | UploadApiErrorResponse>((resolve, reject) => {
+                const upload = v2.uploader.upload_stream({ resource_type: 'video' }, (error, result) => {
+                    if (error) {
+                        return reject(error);
+                    }
+
+                    resolve(result);
+                });
+                streamifier.createReadStream(file.buffer).pipe(upload);
+            });
+        })
+        return Promise.all(promises);
+    }
 }
