@@ -3,6 +3,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { revalidateFrontendCache, FrontendApp, CacheTag } from '../../libs/common/src';
 
 @Injectable()
 export class CategoryService {
@@ -22,21 +23,7 @@ export class CategoryService {
         }
         
         // Ping Next.js frontend webhook to clear its cache
-        try {
-            const customerWebUrl = process.env.CUSTOMER_WEB_URL;
-            const secret = process.env.REVALIDATION_SECRET;
-            
-            // fire and forget
-            fetch(`${customerWebUrl}/api/revalidate`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tag: 'categories', secret })
-            }).catch(error => {
-                console.error("Failed to revalidate Next.js cache (async error)", error);
-            });
-        } catch (error) {
-            console.error("Failed to revalidate Next.js cache", error);
-        }
+        revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.CATEGORIES);
     }
 
     async uploadProfileImage(file: Array<Express.Multer.File>) {

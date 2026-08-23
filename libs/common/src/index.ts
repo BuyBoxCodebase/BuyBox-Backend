@@ -3,3 +3,4 @@ export * from './generateOTP';
 export * from './roles';
 export * from './roles.decorator';
 export * from './roles.guard';
+export * from './revalidate';
