@@ -67,17 +67,11 @@ export class CategoryController {
   }
 
   @Get("/get")
-  @UseInterceptors(CacheInterceptor)
-  @CacheKey('categories')
-  @CacheTTL(3600000)
   getCategories() {
     return this.categoryService.getCategories();
   }
 
   @Get("/get/sub-categories")
-  @UseInterceptors(CacheInterceptor)
-  @CacheKey('sub-categories')
-  @CacheTTL(3600000)
   getSubCategories() {
     return this.categoryService.getSubCategories();
   }

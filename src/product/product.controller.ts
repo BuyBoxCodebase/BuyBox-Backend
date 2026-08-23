@@ -60,6 +60,14 @@ export class ProductController {
     return this.productService.getProducts({ categoryId: category });
   }
 
+  @Get('/get-by-subcategory')
+  getProductsBySubcategory(
+    @Query('categoryId') categoryId: string,
+    @Query('subCategoryName') subCategoryName: string,
+  ) {
+    return this.productService.getProductsBySubcategory(categoryId, subCategoryName);
+  }
+
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles("SELLER")
   @Get("/get-seller-products")
