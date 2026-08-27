@@ -598,3 +598,51 @@ model Reel {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// --- Added for popular-products / customer-segmentation feature ---
+
+model UserSegment {
+  userId    String   @id @map("_id") @db.ObjectId
+  segmentId Int
+  updatedAt DateTime @updatedAt
+
+  @@index([segmentId])
+}
+
+model PopularProductSnapshot {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  categoryId String   @db.ObjectId
+  segmentId  Int?     // null = global ranking; also what anonymous
+                       // or not-yet-clustered customers fall back to
+  productId  String   @db.ObjectId
+  rank       Int
+  unitsSold  Int
+  updatedAt  DateTime @updatedAt
+
+  @@unique([categoryId, segmentId, productId])
+  @@index([categoryId, segmentId, rank])
+}
+
+// --- Product event tracking for click-based segmentation ---
+// Logged whenever a customer taps into a product detail page or
+// adds a product to cart (even without completing a purchase).
+// This gives the clustering job a rich behavioral signal even
+// when completed orders are sparse.
+
+enum ProductEventType {
+  VIEW              // tapped into product detail page
+  CART_ADD          // added to cart (with or without buying)
+  ORDER_COMPLETED   // product was purchased in a completed order
+}
+
+model ProductEvent {
+  id         String           @id @default(auto()) @map("_id") @db.ObjectId
+  customerId String           @db.ObjectId
+  productId  String           @db.ObjectId
+  categoryId String?          @db.ObjectId
+  type       ProductEventType
+  createdAt  DateTime         @default(now())
+
+  @@index([customerId, createdAt])
+  @@index([categoryId, type])
+}

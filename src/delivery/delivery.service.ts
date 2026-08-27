@@ -1,9 +1,10 @@
 import { generateOTP } from '../../libs/common/src';
 import { ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, ProductEventType } from '@prisma/client';
 import { MailerService } from '../mailer/mailer.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { EventsService } from '../events/events.service';
 
 @Injectable()
 export class DeliveryService {
@@ -11,6 +12,7 @@ export class DeliveryService {
         private readonly prisma: PrismaService,
         private readonly mailer: MailerService,
         private readonly jwtService: JwtService,
+        private readonly events: EventsService,
     ) { }
 
     async getOngoingOrders(deliveryAgentId: string) {
@@ -86,6 +88,13 @@ export class DeliveryService {
 
         const order = await this.prisma.order.findUnique({
             where: { id: payload.orderId },
+            include: {
+                products: {
+                    include: {
+                        product: true
+                    }
+                }
+            }
         });
 
         if (!order) {
@@ -108,6 +117,17 @@ export class DeliveryService {
                     isAssigned: false
                 }
             })
+
+            // Log ORDER_COMPLETED event for each product in the order
+            for (const item of order.products) {
+                this.events.logProductEvent({
+                    customerId: order.userId,
+                    productId: item.productId,
+                    categoryId: item.product.categoryId || undefined,
+                    type: ProductEventType.ORDER_COMPLETED
+                }).catch(err => console.error('Failed to log product event:', err));
+            }
+
             return updatedOrder;
         })
 

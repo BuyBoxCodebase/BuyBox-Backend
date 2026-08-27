@@ -10,8 +10,10 @@ const ALLOWED_ORIGINS = [
   'https://seller.buyboxie.com',
   'https://admin.buyboxie.com',
   'http://localhost:5173',
+  'http://localhost:5174',
   'http://localhost:3000',
-];
+  'http://localhost:3001',
+  ];
 
 const PREVIEW_ORIGIN = /^https:\/\/[a-z0-9-]+\.vercel\.app$/;
 
