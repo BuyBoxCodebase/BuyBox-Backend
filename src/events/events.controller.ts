@@ -1,4 +1,6 @@
-import { Controller, Post, Body, Req } from '@nestjs/common';
+import { Controller, Post, Body, Req, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../customer/auth/guards/jwt-auth.guard';
+import { GetUser } from '../../libs/common/src/get-user.decorator';
 import { EventsService } from './events.service';
 import { ProductEventType } from '@prisma/client';
 
@@ -22,10 +24,14 @@ export class EventsController {
   // POST /events/product
   // Body: { productId, categoryId?, type }
   // Auth: requires a logged-in customer (req.user.id)
+  @UseGuards(JwtAuthGuard)
   @Post('product')
-  log(@Body() dto: LogEventDto, @Req() req: any) {
-    const customerId = req.user?.id;
-    if (!customerId) return; // skip anonymous -- no session to cluster on
-    return this.events.logProductEvent({ ...dto, customerId });
+  async log(@Body() dto: LogEventDto, @GetUser('userId') userId: string) {
+    if (!userId) {
+      // return a meaningful error or just exit
+      return { success: false, message: 'Missing user ID' };
+    }
+    await this.events.logProductEvent({ ...dto, customerId: userId });
+    return { success: true };
   }
 }
