@@ -6,6 +6,7 @@ import { MailerModule } from '../mailer/mailer.module';
 import { JwtStrategy } from '../customer/auth/strategy/jwt.strategy';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { EventsModule } from '../events/events.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
       }),
       inject: [ConfigService],
     }),
+    EventsModule,
   ],
   controllers: [DeliveryController],
   providers: [

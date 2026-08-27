@@ -1253,4 +1253,57 @@ export class ProductService {
     };
   }
 
+  async getPopularForCustomer(customerId: string | null, categoryId?: string, limit = 20) {
+    const segment = customerId
+      ? await this.prisma.userSegment.findUnique({ where: { userId: customerId } })
+      : null;
+
+    return this.getPopular(categoryId, segment?.segmentId ?? null, limit);
+  }
+
+  async getPopular(categoryId?: string, segmentId: number | null = null, limit = 20) {
+    const whereClause: any = { segmentId };
+    if (categoryId) {
+      whereClause.categoryId = categoryId;
+    }
+
+    const snapshots = await this.prisma.popularProductSnapshot.findMany({
+      where: whereClause,
+      orderBy: [
+        { rank: 'asc' },
+        { unitsSold: 'desc' }
+      ],
+      take: limit,
+    });
+
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: snapshots.map((s) => s.productId) } },
+      include: {
+        category: true,
+        subCategory: true,
+        variants: {
+          where: { isDefault: true },
+          include: {
+            inventory: true
+          }
+        },
+        inventory: true
+      }
+    });
+
+    const mappedProducts = products.map(product => {
+      const defaultVariant = product.variants[0] || null;
+      return {
+        ...product,
+        price: defaultVariant?.price || product.basePrice,
+        inventory: defaultVariant?.inventory || (product.inventory && product.inventory.length > 0 ? product.inventory[0] : null),
+        defaultVariant,
+        variants: undefined
+      };
+    });
+
+    const byId = new Map(mappedProducts.map((p) => [p.id, p]));
+
+    return snapshots.map((s) => ({ ...s, product: byId.get(s.productId) }));
+  }
 }

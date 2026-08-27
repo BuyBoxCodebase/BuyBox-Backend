@@ -221,8 +221,15 @@ export class ProductController {
   //       brandId: brandId as string,
   //       minPrice: minPrice as string,
   //       maxPrice: maxPrice as string,
-  //       // attributes: attributeFilters
-  //     }
-  //   });
+  //     });
   // }
+
+  @Get('/popular')
+  getPopularProducts(
+    @Query('categoryId') categoryId?: string,
+    @Query('limit') limit: number = 20,
+    @Query('customerId') customerId?: string
+  ) {
+    return this.productService.getPopularForCustomer(customerId || null, categoryId, Number(limit));
+  }
 }
