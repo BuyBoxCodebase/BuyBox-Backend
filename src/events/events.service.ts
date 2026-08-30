@@ -3,10 +3,15 @@ import { ProductEventType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
 interface LogProductEventInput {
-  customerId: string;
-  productId: string;
-  categoryId?: string;
+  customerId?: string;
+  sessionId: string;
   type: ProductEventType;
+  productId?: string;
+  categoryId?: string;
+  device?: string;
+  platform?: string;
+  source?: string;
+  metadata?: any;
 }
 
 @Injectable()

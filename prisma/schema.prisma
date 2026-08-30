@@ -633,16 +633,31 @@ enum ProductEventType {
   VIEW              // tapped into product detail page
   CART_ADD          // added to cart (with or without buying)
   ORDER_COMPLETED   // product was purchased in a completed order
+  PRODUCT_CLICK     // clicked on a product card
+  REMOVE_FROM_CART  // removed from cart
+  CHECKOUT_STARTED  // started checkout flow
+  PURCHASE          // completed a purchase order
+  SEARCH            // executed a search query
+  SEARCH_RESULT_CLICK // clicked a product from search
+  CATEGORY_VIEW     // viewed a category page
+  SHARE             // shared a product or page
+  IMPRESSION        // product was rendered in viewport (but not clicked)
 }
 
 model ProductEvent {
   id         String           @id @default(auto()) @map("_id") @db.ObjectId
-  customerId String           @db.ObjectId
-  productId  String           @db.ObjectId
+  customerId String?          @db.ObjectId // Optional for anonymous session tracking
+  sessionId  String           // Links events for the same visit
+  productId  String?          @db.ObjectId
   categoryId String?          @db.ObjectId
   type       ProductEventType
+  device     String?
+  platform   String?
+  source     String?
+  metadata   Json?            // For search queries, purchase outcomes, attributes, etc.
   createdAt  DateTime         @default(now())
 
+  @@index([sessionId, createdAt])
   @@index([customerId, createdAt])
   @@index([categoryId, type])
 }
