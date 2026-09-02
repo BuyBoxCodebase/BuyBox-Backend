@@ -10,6 +10,18 @@ class DefaultVariantDto {
     optionValues?: string[];
 }
 
+class GeneratedVariantOptionDto {
+    optionName: string;
+    value: string;
+}
+
+class GeneratedVariantDto {
+    name: string;
+    price: number;
+    inventory: number;
+    options: GeneratedVariantOptionDto[];
+}
+
 export class CreateProductDto {
     name: string;
     description: string;
@@ -20,4 +32,5 @@ export class CreateProductDto {
     inventory: string;
     options?: ProductOptionDto[];
     defaultVariant?: DefaultVariantDto;
+    generatedVariants?: GeneratedVariantDto[];
 }

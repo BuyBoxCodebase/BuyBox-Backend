@@ -47,15 +47,16 @@ export class ReelsService {
     }
 
     async getReelsBySeller(sellerId: string) {
-        const reels = await this.prisma.reel.findMany({
-            where: {
-                product: {
-                    brand: {
-                        userId: sellerId
-                    }
-                }
-            }
-        });
-        return reels;
+        // const reels = await this.prisma.reel.findMany({
+        //     where: {
+        //         product: {
+        //             brand: {
+        //                 userId: sellerId
+        //             }
+        //         }
+        //     }
+        // });
+        /* This query is incorrect the business logic has changed consult the stake holder's before working on it*/
+        return [];
     }
 }
