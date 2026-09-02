@@ -122,6 +122,7 @@ export class DeliveryService {
             for (const item of order.products) {
                 this.events.logProductEvent({
                     customerId: order.userId,
+                    sessionId: 'system-delivery',
                     productId: item.productId,
                     categoryId: item.product.categoryId || undefined,
                     type: ProductEventType.ORDER_COMPLETED

@@ -28,6 +28,7 @@ export class ProductService {
       inventory,
       options = [],
       defaultVariant,
+      generatedVariants = [],
     } = data;
 
     const brand = await this.prisma.brand.findUnique({
@@ -127,8 +128,45 @@ export class ProductService {
           }
         });
 
-        // Create the default variant if provided
-        if (defaultVariant) {
+        // Create variants from generatedVariants if available
+        if (generatedVariants && generatedVariants.length > 0) {
+          for (let i = 0; i < generatedVariants.length; i++) {
+            const gv = generatedVariants[i];
+            
+            const optionValueIdsToConnect = gv.options.map(opt => {
+              const optionRecord = newProduct.options.find(o => o.name === opt.optionName);
+              if (!optionRecord) return null;
+              const valueRecord = optionRecord.values.find(v => v.value === opt.value);
+              return valueRecord?.id;
+            }).filter(id => id != null);
+
+            const variant = await tx.productVariant.create({
+              data: {
+                product: { connect: { id: newProduct.id } },
+                name: gv.name,
+                price: Number(gv.price),
+                isDefault: i === 0,
+                images: newProduct.images,
+                ...(optionValueIdsToConnect.length > 0 ? {
+                  options: {
+                    create: optionValueIdsToConnect.map(optId => ({
+                      optionValue: { connect: { id: optId } }
+                    }))
+                  }
+                } : {})
+              }
+            });
+
+            await tx.inventory.create({
+              data: {
+                variant: { connect: { id: variant.id } },
+                quantity: Number(gv.inventory) || 0
+              }
+            });
+          }
+        }
+        // Fallback to creating a single default variant if provided
+        else if (defaultVariant) {
           const { price, stockQuantity, images: variantImages = [], optionValues = [] } = defaultVariant;
 
           // Create the default variant
