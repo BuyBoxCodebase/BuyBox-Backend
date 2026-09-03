@@ -16,8 +16,8 @@ export class ProductController {
   @Roles("SELLER")
   @UseInterceptors(FilesInterceptor('files', 5, {
     fileFilter(req, file, callback) {
-      if (!file.mimetype.match(/\/(jpg|jpeg|png)$/)) {
-        return callback(new BadRequestException('Only JPG, JPEG, and PNG files are allowed!'), false);
+      if (!file.mimetype.startsWith('image/')) {
+        return callback(new BadRequestException('Only image files are allowed!'), false);
       }
       callback(null, true);
     },

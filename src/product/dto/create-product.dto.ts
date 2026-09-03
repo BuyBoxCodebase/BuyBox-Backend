@@ -20,6 +20,7 @@ class GeneratedVariantDto {
     price: number;
     inventory: number;
     options: GeneratedVariantOptionDto[];
+    image?: string;
 }
 
 export class CreateProductDto {

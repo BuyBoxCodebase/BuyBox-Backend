@@ -146,7 +146,7 @@ export class ProductService {
                 name: gv.name,
                 price: Number(gv.price),
                 isDefault: i === 0,
-                images: newProduct.images,
+                images: gv.image ? [gv.image] : newProduct.images,
                 ...(optionValueIdsToConnect.length > 0 ? {
                   options: {
                     create: optionValueIdsToConnect.map(optId => ({
