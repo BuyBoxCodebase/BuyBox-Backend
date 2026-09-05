@@ -45,6 +45,7 @@ model Customer {
   coupons           CustomerCoupon[]
   orderPreferences  OrderPreference?
   notificationPrefs NotificationPreference?
+  conversations     Conversation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -61,10 +62,9 @@ model Seller {
   googleId          String?
   facebookId        String?
   isCompleted       Boolean                 @default(false)
-  twoFactorSecret   String?
-  twoFactorEnabled  Boolean                 @default(false)
   brand             Brand?
   notificationPrefs NotificationPreference?
+  conversations     Conversation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -133,6 +133,8 @@ model Category {
   products       Product[]
   subCategories  SubCategory[]
   advertisements Advertisement[]
+
+  @@index([priority])
 }
 
 model SubCategory {
@@ -143,6 +145,9 @@ model SubCategory {
   categoryId String    @db.ObjectId
   category   Category  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   products   Product[]
+
+  @@index([categoryId])
+  @@index([priority])
 }
 
 model Product {
@@ -164,6 +169,8 @@ model Product {
   variants       ProductVariant[]
   options        ProductOption[]
   advertisements Advertisement[]
+  conversations  Conversation[]
+  reels          Reel[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -254,6 +261,7 @@ model Order {
   paymentMode     PaymentMode    @default(CASH_ON_DELIVERY)
   deliveryAgentId String?        @db.ObjectId
   deliveryAgent   DeliveryAgent? @relation(fields: [deliveryAgentId], references: [id])
+  conversations   Conversation[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -276,6 +284,7 @@ enum OrderStatus {
   PROCESSING
   COMPLETED
   CANCELED
+  OUT_OF_STOCK
 }
 
 model Notification {
@@ -321,7 +330,7 @@ model OrderPreference {
   city           String
   state          String
   postalCode     String
-  country        String      @default("India")
+  country        String      @default("Zimbabwe")
   paymentMode    PaymentMode @default(CASH_ON_DELIVERY)
   cardNumber     String?
   cardType       String?
@@ -485,4 +494,170 @@ model AdMetrics {
   updatedAt DateTime @updatedAt
 
   @@unique([advertisementId, date])
+}
+
+enum MessageType {
+  TEXT
+  QUICK_REPLY
+  SYSTEM
+  ORDER_UPDATE
+}
+
+enum ConversationType {
+  PRE_PURCHASE
+  POST_PURCHASE
+  GENERAL
+}
+
+enum ConversationStatus {
+  ACTIVE
+  CLOSED
+  ARCHIVED
+}
+
+model Conversation {
+  id               String             @id @default(auto()) @map("_id") @db.ObjectId
+  buyerId          String             @db.ObjectId
+  buyer            Customer           @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  sellerId         String             @db.ObjectId
+  seller           Seller             @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  productId        String?            @db.ObjectId
+  product          Product?           @relation(fields: [productId], references: [id])
+  orderId          String?            @db.ObjectId
+  order            Order?             @relation(fields: [orderId], references: [id])
+  type             ConversationType   @default(PRE_PURCHASE)
+  status           ConversationStatus @default(ACTIVE)
+  lastMessageId    String?            @db.ObjectId
+  lastMessageAt    DateTime?
+  messages         Message[]
+  isArchivedBuyer  Boolean            @default(false)
+  isArchivedSeller Boolean            @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([buyerId, sellerId, productId])
+}
+
+model Message {
+  id             String       @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String       @db.ObjectId
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId       String       @db.ObjectId
+  senderType     String // "buyer" or "seller"
+  content        String
+  type           MessageType  @default(TEXT)
+  isRead         Boolean      @default(false)
+  readAt         DateTime?
+  metadata       Json? // For storing quick reply data, system message info, etc.
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ChatNotification {
+  id             String  @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String  @db.ObjectId
+  recipientId    String  @db.ObjectId
+  recipientType  String // "buyer" or "seller"
+  messageId      String  @db.ObjectId
+  title          String
+  body           String
+  isRead         Boolean @default(false)
+  isSent         Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model ChatReport {
+  id             String    @id @default(auto()) @map("_id") @db.ObjectId
+  conversationId String    @db.ObjectId
+  reporterId     String    @db.ObjectId
+  reporterType   String // "buyer" or "seller"
+  reportedId     String    @db.ObjectId
+  reportedType   String // "buyer" or "seller"
+  reason         String
+  description    String?
+  status         String    @default("PENDING") // PENDING, REVIEWED, RESOLVED
+  reviewedBy     String?   @db.ObjectId // Admin ID
+  reviewedAt     DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Reel {
+  id        String  @id @default(auto()) @map("_id") @db.ObjectId
+  productId String  @db.ObjectId
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  caption   String
+  size      String?
+  videoUrl  String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// --- Added for popular-products / customer-segmentation feature ---
+
+model UserSegment {
+  userId    String   @id @map("_id") @db.ObjectId
+  segmentId Int
+  updatedAt DateTime @updatedAt
+
+  @@index([segmentId])
+}
+
+model PopularProductSnapshot {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  categoryId String   @db.ObjectId
+  segmentId  Int?     // null = global ranking; also what anonymous
+                       // or not-yet-clustered customers fall back to
+  productId  String   @db.ObjectId
+  rank       Int
+  unitsSold  Int
+  updatedAt  DateTime @updatedAt
+
+  @@unique([categoryId, segmentId, productId])
+  @@index([categoryId, segmentId, rank])
+}
+
+// --- Product event tracking for click-based segmentation ---
+// Logged whenever a customer taps into a product detail page or
+// adds a product to cart (even without completing a purchase).
+// This gives the clustering job a rich behavioral signal even
+// when completed orders are sparse.
+
+enum ProductEventType {
+  VIEW              // tapped into product detail page
+  CART_ADD          // added to cart (with or without buying)
+  ORDER_COMPLETED   // product was purchased in a completed order
+  PRODUCT_CLICK     // clicked on a product card
+  REMOVE_FROM_CART  // removed from cart
+  CHECKOUT_STARTED  // started checkout flow
+  PURCHASE          // completed a purchase order
+  SEARCH            // executed a search query
+  SEARCH_RESULT_CLICK // clicked a product from search
+  CATEGORY_VIEW     // viewed a category page
+  SHARE             // shared a product or page
+  SHOWN             // product was rendered in viewport (but not clicked)
+}
+
+model ProductEvent {
+  id         String           @id @default(auto()) @map("_id") @db.ObjectId
+  customerId String?          @db.ObjectId // Optional for anonymous session tracking
+  sessionId  String           // Links events for the same visit
+  productId  String?          @db.ObjectId
+  categoryId String?          @db.ObjectId
+  type       ProductEventType
+  device     String?
+  platform   String?
+  source     String?
+  metadata   Json?            // For search queries, purchase outcomes, attributes, etc.
+  createdAt  DateTime         @default(now())
+
+  @@index([sessionId, createdAt])
+  @@index([customerId, createdAt])
+  @@index([categoryId, type])
 }

@@ -1,9 +1,9 @@
 import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
 import { DeliveryService } from './delivery.service';
+import { JwtAuthGuard } from '../customer/auth/guards/jwt-auth.guard';
 import { GetUser, Roles, RolesGuard } from '../../libs/common/src';
-import { SessionAuthGuard } from '@app/shared';
 
-@UseGuards(SessionAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, RolesGuard)
 @Roles("DELIVERY_AGENT")
 @Controller('delivery')
 export class DeliveryController {
