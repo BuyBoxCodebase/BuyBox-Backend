@@ -641,7 +641,7 @@ enum ProductEventType {
   SEARCH_RESULT_CLICK // clicked a product from search
   CATEGORY_VIEW     // viewed a category page
   SHARE             // shared a product or page
-  IMPRESSION        // product was rendered in viewport (but not clicked)
+  SHOWN             // product was rendered in viewport (but not clicked)
 }
 
 model ProductEvent {
