@@ -118,7 +118,7 @@ export class DeliveryService {
                 }
             })
 
-            // Log ORDER_COMPLETED event for each product in the order
+            // Log ORDER_COMPLETED and ORDER_DELIVERED event for each product in the order
             for (const item of order.products) {
                 this.events.logProductEvent({
                     customerId: order.userId,
@@ -126,6 +126,14 @@ export class DeliveryService {
                     productId: item.productId,
                     categoryId: item.product.categoryId || undefined,
                     type: ProductEventType.ORDER_COMPLETED
+                }).catch(err => console.error('Failed to log product event:', err));
+
+                this.events.logProductEvent({
+                    customerId: order.userId,
+                    sessionId: 'system-delivery',
+                    productId: item.productId,
+                    categoryId: item.product.categoryId || undefined,
+                    type: ProductEventType.ORDER_DELIVERED
                 }).catch(err => console.error('Failed to log product event:', err));
             }
 
