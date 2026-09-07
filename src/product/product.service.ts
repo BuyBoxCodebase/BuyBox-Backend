@@ -197,6 +197,9 @@ export class ProductService {
         }
 
         return newProduct;
+      }, {
+        maxWait: 5000,
+        timeout: 30000,
       });
 
       revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
@@ -302,6 +305,9 @@ export class ProductService {
           message: "Variant created successfully",
           variantId: variant.id
         };
+      }, {
+        maxWait: 5000,
+        timeout: 30000,
       });
     } catch (error) {
       console.error('Create variant failed:', error);
