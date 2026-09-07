@@ -2,7 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { CreateOrderDto } from './dto/create-order.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailerService } from '../../src/mailer/mailer.service';
-import { OrderStatus } from '@prisma/client';
+import { OrderStatus, ProductEventType } from '@prisma/client';
 
 @Injectable()
 export class OrderService {
@@ -589,6 +589,21 @@ export class OrderService {
         where: { id: orderId },
         data: { status: OrderStatus.CANCELED }
       });
+
+      // Fire analytics event for cancellation
+      for (const item of order.products) {
+        if (item.productId) {
+          await prisma.productEvent.create({
+            data: {
+              customerId: userId,
+              sessionId: `system-order-${orderId}`,
+              productId: item.productId,
+              type: ProductEventType.ORDER_CANCELED,
+              metadata: { orderId, variantId: item.variantId }
+            }
+          }).catch(err => console.error('Failed to log ORDER_CANCELED event:', err));
+        }
+      }
 
       return {
         success: true,
