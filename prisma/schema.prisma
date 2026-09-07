@@ -642,6 +642,18 @@ enum ProductEventType {
   CATEGORY_VIEW     // viewed a category page
   SHARE             // shared a product or page
   SHOWN             // product was rendered in viewport (but not clicked)
+  SESSION_STARTED
+  HOME_VIEWED
+  PRODUCT_SAVED
+  PRODUCT_DISMISSED
+  SIZE_SELECTED
+  FILTER_APPLIED
+  BUDGET_SELECTED
+  CART_ABANDONED
+  ORDER_CANCELED
+  ORDER_DELIVERED
+  SIZE_FEEDBACK_SUBMITTED
+  PRODUCT_RATED
 }
 
 model ProductEvent {
