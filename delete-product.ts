@@ -31,7 +31,7 @@ async function main() {
     }
 
     // 3. Delete Product Events referencing this product (Not a strict relation)
-    const deletedEvents = await prisma.productEvent.deleteMany({
+    const deletedEvents = await prisma.userEvent.deleteMany({
       where: { productId },
     });
     if (deletedEvents.count > 0) {

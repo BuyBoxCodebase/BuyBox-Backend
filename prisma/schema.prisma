@@ -629,7 +629,7 @@ model PopularProductSnapshot {
 // This gives the clustering job a rich behavioral signal even
 // when completed orders are sparse.
 
-enum ProductEventType {
+enum UserEventType {
   VIEW              // tapped into product detail page
   CART_ADD          // added to cart (with or without buying)
   ORDER_COMPLETED   // product was purchased in a completed order
@@ -656,13 +656,13 @@ enum ProductEventType {
   PRODUCT_RATED
 }
 
-model ProductEvent {
+model UserEvent {
   id         String           @id @default(auto()) @map("_id") @db.ObjectId
   customerId String?          @db.ObjectId // Optional for anonymous session tracking
   sessionId  String           // Links events for the same visit
   productId  String?          @db.ObjectId
   categoryId String?          @db.ObjectId
-  type       ProductEventType
+  type       UserEventType
   device     String?
   platform   String?
   source     String?

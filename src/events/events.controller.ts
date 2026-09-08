@@ -2,11 +2,11 @@ import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { OptionalJwtAuthGuard } from '../customer/auth/guards/optional-jwt-auth.guard';
 import { GetUser } from '../../libs/common/src/get-user.decorator';
 import { EventsService } from './events.service';
-import { ProductEventType } from '@prisma/client';
+import { UserEventType } from '@prisma/client';
 
 export class LogEventDto {
   sessionId: string;
-  type: ProductEventType;
+  type: UserEventType;
   productId?: string;
   categoryId?: string;
   device?: string;
@@ -35,7 +35,7 @@ export class EventsController {
     if (!dto.sessionId) {
       return { success: false, message: 'Missing sessionId' };
     }
-    await this.events.logProductEvent({ ...dto, customerId: userId });
+    await this.events.logUserEvent({ ...dto, customerId: userId });
     return { success: true };
   }
 }
