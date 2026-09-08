@@ -13,6 +13,9 @@ const ALLOWED_ORIGINS = [
   'http://localhost:5174',
   'http://localhost:3000',
   'http://localhost:3001',
+  "https://treides.com",
+  "https://sell.treides.com",
+  "https://admin.treides.com"
   ];
 
 const PREVIEW_ORIGIN = /^https:\/\/[a-z0-9-]+\.vercel\.app$/;
