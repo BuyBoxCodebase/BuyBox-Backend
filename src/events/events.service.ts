@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
-import { ProductEventType } from '@prisma/client';
+import { UserEventType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 
-interface LogProductEventInput {
+interface LogUserEventInput {
   customerId?: string;
   sessionId: string;
-  type: ProductEventType;
+  type: UserEventType;
   productId?: string;
   categoryId?: string;
   device?: string;
@@ -18,7 +18,7 @@ interface LogProductEventInput {
 export class EventsService {
   constructor(private prisma: PrismaService) {}
 
-  async logProductEvent(data: LogProductEventInput) {
+  async logUserEvent(data: LogUserEventInput) {
     if (!data.categoryId) {
       const product = await this.prisma.product.findUnique({
         where: { id: data.productId },
@@ -28,6 +28,6 @@ export class EventsService {
         data.categoryId = product.categoryId;
       }
     }
-    return await this.prisma.productEvent.create({ data });
+    return await this.prisma.userEvent.create({ data });
   }
 }

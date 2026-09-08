@@ -1,7 +1,7 @@
 import { generateOTP } from '../../libs/common/src';
 import { ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import { OrderStatus, ProductEventType } from '@prisma/client';
+import { OrderStatus, UserEventType } from '@prisma/client';
 import { MailerService } from '../mailer/mailer.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
@@ -120,20 +120,20 @@ export class DeliveryService {
 
             // Log ORDER_COMPLETED and ORDER_DELIVERED event for each product in the order
             for (const item of order.products) {
-                this.events.logProductEvent({
+                this.events.logUserEvent({
                     customerId: order.userId,
                     sessionId: 'system-delivery',
                     productId: item.productId,
                     categoryId: item.product.categoryId || undefined,
-                    type: ProductEventType.ORDER_COMPLETED
+                    type: UserEventType.ORDER_COMPLETED
                 }).catch(err => console.error('Failed to log product event:', err));
 
-                this.events.logProductEvent({
+                this.events.logUserEvent({
                     customerId: order.userId,
                     sessionId: 'system-delivery',
                     productId: item.productId,
                     categoryId: item.product.categoryId || undefined,
-                    type: ProductEventType.ORDER_DELIVERED
+                    type: UserEventType.ORDER_DELIVERED
                 }).catch(err => console.error('Failed to log product event:', err));
             }
 
