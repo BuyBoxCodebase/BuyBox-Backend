@@ -36,7 +36,7 @@ model Customer {
   password          String?
   profilePic        String?
   phoneNumber       String?
-  interests         String[]                @default([])
+  preferences       Json?
   isCompleted       Boolean                 @default(false)
   googleId          String?
   facebookId        String?
@@ -673,3 +673,4 @@ model UserEvent {
   @@index([customerId, createdAt])
   @@index([categoryId, type])
 }
+

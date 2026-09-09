@@ -19,7 +19,7 @@ export class EventsService {
   constructor(private prisma: PrismaService) {}
 
   async logUserEvent(data: LogUserEventInput) {
-    if (!data.categoryId) {
+    if (!data.categoryId && data.productId) {
       const product = await this.prisma.product.findUnique({
         where: { id: data.productId },
         select: { categoryId: true },

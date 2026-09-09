@@ -81,7 +81,6 @@ export class AdminControlService {
           password: true,
           googleId: true,
           facebookId: true,
-          interests: true,
           username: true,
           updatedAt: true,
         },

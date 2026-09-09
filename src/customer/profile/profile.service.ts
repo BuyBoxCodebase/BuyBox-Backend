@@ -32,7 +32,7 @@ export class CustomerProfileService {
                 profilePic: true,
                 username: true,
                 isCompleted: true,
-                interests: true,
+                preferences: true,
             }
         });
 
@@ -50,54 +50,36 @@ export class CustomerProfileService {
         }
     }
 
-    async updateCustomerDetails(userId: string, data: { name: string, username: string, phoneNumber: string; profilePic: string; }) {
+    async updateCustomerDetails(userId: string, data: { name?: string, username?: string, phoneNumber?: string; profilePic?: string; preferences?: any }) {
+        const updateData: any = { isCompleted: true };
+        if (data.name !== undefined) updateData.name = data.name;
+        if (data.username !== undefined) updateData.username = data.username;
+        if (data.phoneNumber !== undefined) updateData.phoneNumber = data.phoneNumber;
+        if (data.profilePic !== undefined) updateData.profilePic = data.profilePic;
+        if (data.preferences !== undefined) updateData.preferences = data.preferences;
+
         const updatedCustomer = await this.prisma.customer.update({
-            where: {
-                id: userId
-            },
-            data: {
-                name: data.name,
-                username: data.username,
-                phoneNumber: data.phoneNumber,
-                profilePic: data.profilePic,
-                isCompleted: true,
-            }
+            where: { id: userId },
+            data: updateData
         });
+
+        if (data.preferences?.goal) {
+            let segmentId = 3; // casual fallback
+            if (data.preferences.goal === "Finding the best deals") segmentId = 1;
+            else if (data.preferences.goal === "Discovering new trends") segmentId = 2;
+
+            await this.prisma.userSegment.upsert({
+                where: { userId },
+                create: { userId, segmentId },
+                update: { segmentId }
+            });
+        }
 
         return {
             success: true,
             message: "Update Customer details",
             userId: updatedCustomer.id
         }
-    }
-
-    async updateInterests(userId: string, categoryIds: string[]) {
-        if (!Array.isArray(categoryIds)) {
-            return { success: false, message: "categoryIds must be an array" };
-        }
-
-        // only persist ids that map to a real category, so interests always
-        // stay joinable against Category and ad targeting keeps matching
-        const valid = await this.prisma.category.findMany({
-            where: { id: { in: categoryIds } },
-            select: { id: true },
-        });
-        const interests = valid.map((c) => c.id);
-
-        if (interests.length === 0) {
-            return { success: false, message: "No valid categories provided" };
-        }
-
-        await this.prisma.customer.update({
-            where: { id: userId },
-            data: { interests },
-        });
-
-        return {
-            success: true,
-            message: "Interests updated",
-            interests,
-        };
     }
 
     async setCustomerOrderPreference() { }

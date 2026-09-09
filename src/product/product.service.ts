@@ -1302,7 +1302,7 @@ export class ProductService {
       ? await this.prisma.userSegment.findUnique({ where: { userId: customerId } })
       : null;
 
-    return this.getPopular(categoryId, segment?.segmentId ?? null, limit);
+    return this.getPopular(categoryId, segment.segmentId, limit);
   }
 
   async getPopular(categoryId?: string, segmentId: number | null = null, limit = 20) {
