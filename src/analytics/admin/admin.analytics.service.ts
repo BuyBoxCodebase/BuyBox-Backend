@@ -22,7 +22,6 @@ export class AdminAnalyticsService {
                 username: true,
                 profilePic: true,
                 phoneNumber: true,
-                isCompleted: true,
                 createdAt: true,
                 updatedAt: true,
             },

@@ -124,7 +124,6 @@ export class CustomerAuthService {
                 googleId: profile.id,
                 name: profile.displayName,
                 profilePic: profile.photos[0].value,
-                isCompleted: false,
             },
         });
 
