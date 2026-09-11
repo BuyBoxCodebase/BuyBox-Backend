@@ -1354,4 +1354,36 @@ export class ProductService {
 
     return snapshots.map((s) => ({ ...s, product: byId.get(s.productId) }));
   }
-}
+
+  async getTrendingProducts(limit = 20, skip = 0) {
+    // Most recent order items across all statuses, paginated
+    const orderItems = await this.prisma.orderProduct.findMany({
+      orderBy: { order: { createdAt: 'desc' } },
+      skip,
+      take: limit,
+      select: { productId: true },
+      distinct: ['productId'],
+    });
+
+    const productIds = orderItems.map((o) => o.productId);
+    if (productIds.length === 0) return [];
+
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: productIds } },
+      include: {
+        category: true,
+        subCategory: true,
+        variants: {
+          where: { isDefault: true },
+          include: { inventory: true },
+        },
+        inventory: true,
+      },
+    });
+
+    // Preserve the recency order from orderItems
+    const byId = new Map(products.map((p) => [p.id, p]));
+    // Wrap in { product } to match the snapshot envelope the frontend expects
+    return productIds.map((id) => ({ product: byId.get(id) })).filter((s) => s.product);
+  }
+}

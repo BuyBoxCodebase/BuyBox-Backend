@@ -36,8 +36,6 @@ model Customer {
   password          String?
   profilePic        String?
   phoneNumber       String?
-  preferences       Json?
-  isCompleted       Boolean                 @default(false)
   googleId          String?
   facebookId        String?
   cart              Cart?

@@ -144,11 +144,16 @@ export class ProductController {
   }
 
   @Get('/popular')
-  getPopularProducts(
+  async getPopularProducts(
     @Query('categoryId') categoryId?: string,
     @Query('limit') limit: number = 20,
+    @Query('skip') skip: number = 0,
     @Query('customerId') customerId?: string
   ) {
-    return this.productService.getPopularForCustomer(customerId || null, categoryId, Number(limit));
+    const results = await this.productService.getPopularForCustomer(customerId || null, categoryId, Number(limit));
+    if (results.length > 0) return results;
+
+    // Fallback: new/unsegmented customer — most recently ordered products, paginated
+    return this.productService.getTrendingProducts(Number(limit), Number(skip));
   }
 }

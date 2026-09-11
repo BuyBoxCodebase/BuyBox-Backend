@@ -31,8 +31,6 @@ export class CustomerProfileService {
                 email: true,
                 profilePic: true,
                 username: true,
-                isCompleted: true,
-                preferences: true,
             }
         });
 
@@ -50,30 +48,17 @@ export class CustomerProfileService {
         }
     }
 
-    async updateCustomerDetails(userId: string, data: { name?: string, username?: string, phoneNumber?: string; profilePic?: string; preferences?: any }) {
-        const updateData: any = { isCompleted: true };
+    async updateCustomerDetails(userId: string, data: { name?: string, username?: string, phoneNumber?: string; profilePic?: string }) {
+        const updateData: any = {};
         if (data.name !== undefined) updateData.name = data.name;
         if (data.username !== undefined) updateData.username = data.username;
         if (data.phoneNumber !== undefined) updateData.phoneNumber = data.phoneNumber;
         if (data.profilePic !== undefined) updateData.profilePic = data.profilePic;
-        if (data.preferences !== undefined) updateData.preferences = data.preferences;
 
         const updatedCustomer = await this.prisma.customer.update({
             where: { id: userId },
             data: updateData
         });
-
-        if (data.preferences?.goal) {
-            let segmentId = 3; // casual fallback
-            if (data.preferences.goal === "Finding the best deals") segmentId = 1;
-            else if (data.preferences.goal === "Discovering new trends") segmentId = 2;
-
-            await this.prisma.userSegment.upsert({
-                where: { userId },
-                create: { userId, segmentId },
-                update: { segmentId }
-            });
-        }
 
         return {
             success: true,
