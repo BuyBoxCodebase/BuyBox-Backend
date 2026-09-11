@@ -234,7 +234,7 @@ export class AdsService {
                 where: { id: userId },
                 select: {
                     id: true,
-                    interests: true,
+                    preferences: true,
                     createdAt: true,
                     updatedAt: true,
                     // city: true,
@@ -259,15 +259,6 @@ export class AdsService {
                 { targetType: AdTargetType.ALL_USERS },
                 ...(isNewUser ? [{ targetType: AdTargetType.NEW_USERS }] : []),
                 ...(isReturningUser ? [{ targetType: AdTargetType.RETURNING_USERS }] : []),
-
-                // Interest-based targeting
-                ...(user.interests?.length > 0 ? [{
-                    targetType: AdTargetType.INTEREST_BASED,
-                    targetConfig: {
-                        path: ['interests'],
-                        array_contains: user.interests,
-                    }
-                }] : []),
 
                 // Location-based targeting
                 // ...(user.city || user.country ? [{

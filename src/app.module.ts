@@ -19,7 +19,6 @@ import { DeliveryAgentModule } from './delivery-agent/delivery-agent.module';
 import { SchedulerModule } from './scheduler/scheduler.module';
 import { ChatModule } from './chat/chat.module';
 import { ReelsModule } from './reels/reels.module';
-import { RecommendationModule } from './recommendation/recommendation.module';
 import { EventsModule } from './events/events.module';
 
 import { CacheModule } from '@nestjs/cache-manager';
@@ -62,7 +61,6 @@ import { createKeyv } from '@keyv/redis';
     SchedulerModule,
     ChatModule,
     ReelsModule,
-    RecommendationModule,
     EventsModule,
   ],
   controllers: [],
