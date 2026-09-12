@@ -161,6 +161,7 @@ model Product {
   subCategory    SubCategory?     @relation(fields: [subCategoryId], references: [id])
   basePrice      Float
   attributes     Json?
+  labels         String[]         @default([])
   inventory      Inventory[]
   cartItems      CartItem[]
   orderItems     OrderProduct[]

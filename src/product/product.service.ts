@@ -29,6 +29,7 @@ export class ProductService {
       options = [],
       defaultVariant,
       generatedVariants = [],
+      labels = [],
     } = data;
 
     const brand = await this.prisma.brand.findUnique({
@@ -41,6 +42,13 @@ export class ProductService {
       return {
         success: false,
         message: "Brand not found for this user",
+      };
+    }
+
+    if (!labels || labels.length === 0) {
+      return {
+        success: false,
+        message: "At least one label is required",
       };
     }
 
@@ -84,6 +92,7 @@ export class ProductService {
             brand: { connect: { id: brand.id } },
             name,
             description,
+            labels,
             ...(categoryId ? {
               category: {
                 connect: {
@@ -1074,6 +1083,7 @@ export class ProductService {
       subCategoryId,
       basePrice,
       images,
+      labels,
     } = data;
 
     const product = await this.prisma.product.findUnique({
@@ -1087,6 +1097,10 @@ export class ProductService {
 
     if (!product) {
       throw new BadRequestException("Error while updating the product");
+    }
+
+    if (labels !== undefined && (!Array.isArray(labels) || labels.length === 0)) {
+      throw new BadRequestException("At least one label is required");
     }
 
     if (categoryId) {
@@ -1129,7 +1143,8 @@ export class ProductService {
           }
         }),
         ...(basePrice && { basePrice: parseFloat(basePrice) }),
-        ...(images && { images })
+        ...(images && { images }),
+        ...(labels && { labels })
       }
     });
 
