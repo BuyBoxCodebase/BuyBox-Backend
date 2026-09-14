@@ -234,7 +234,6 @@ export class AdsService {
                 where: { id: userId },
                 select: {
                     id: true,
-                    preferences: true,
                     createdAt: true,
                     updatedAt: true,
                     // city: true,
