@@ -12,7 +12,7 @@ export class OrderService {
   ) { }
 
   async createOrder(userId: string, createOrderDto: CreateOrderDto) {
-    const { email, address, phoneNumber, paymentMode, products, cartId } = createOrderDto;
+    const { email, address, phoneNumber, paymentMode, products, cartId, fulfillmentType, pickupLocationId, pickupDate, pickupFee } = createOrderDto;
 
     const order = await this.prisma.$transaction(
       async (prisma) => {
@@ -36,9 +36,10 @@ export class OrderService {
             throw new Error("Cart not found or is empty");
           }
 
-          console.log('Calculating total amount..');
           totalAmount = cart.products.reduce((sum, item) => sum + item.totalPrice, 0);
-          console.log('Calculated total amount');
+          if (pickupFee) {
+            totalAmount += pickupFee;
+          }
 
           // Process each cart item based on whether it has a variant or not
           for (const item of cart.products) {
@@ -98,7 +99,6 @@ export class OrderService {
             where: { cartId: cart.id },
           });
           await prisma.cart.delete({ where: { id: cartId } });
-          console.log('Cart cleared');
         } else if (products) {
           const { productId, variantId, quantity } = products;
 
@@ -176,6 +176,9 @@ export class OrderService {
 
           const itemTotalPrice = itemPrice * quantity;
           totalAmount = itemTotalPrice;
+          if (pickupFee) {
+            totalAmount += pickupFee;
+          }
 
           orderProductsData.push({
             productId: productId,
@@ -189,16 +192,16 @@ export class OrderService {
 
         const order = await prisma.order.create({
           data: {
-            user: {
-              connect: {
-                id: userId
-              }
-            },
+            userId,
             email,
             phoneNumber,
             address,
             totalAmount,
             paymentMode,
+            fulfillmentType: fulfillmentType || 'DELIVERY',
+            pickupLocationId,
+            pickupDate: pickupDate ? new Date(pickupDate) : undefined,
+            pickupFee,
             products: { create: orderProductsData },
           },
           include: {
@@ -220,7 +223,6 @@ export class OrderService {
           },
         });
 
-        console.log('Order created');
         return order;
       },
       {
@@ -251,6 +253,10 @@ export class OrderService {
         status: true,
         paymentMode: true,
         totalAmount: true,
+        fulfillmentType: true,
+        pickupLocation: true,
+        pickupDate: true,
+        pickupFee: true,
         createdAt: true,
       }
     });
@@ -308,7 +314,8 @@ export class OrderService {
             }
           }
         },
-        deliveryAgent: true
+        deliveryAgent: true,
+        pickupLocation: true
       },
       omit: {
         updatedAt: true,

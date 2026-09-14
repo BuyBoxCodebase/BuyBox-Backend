@@ -23,7 +23,8 @@ import { EventsModule } from './events/events.module';
 
 import { CacheModule } from '@nestjs/cache-manager';
 import { createKeyv } from '@keyv/redis';
-
+import { LocationModule } from './location/location.module';
+import { CheckoutModule } from './checkout/checkout.module';
 @Module({
   imports: [
     ConfigModule.forRoot(),
@@ -62,6 +63,8 @@ import { createKeyv } from '@keyv/redis';
     ChatModule,
     ReelsModule,
     EventsModule,
+    LocationModule,
+    CheckoutModule,
   ],
   controllers: [],
   providers: [],
