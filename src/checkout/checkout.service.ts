@@ -4,11 +4,12 @@ import * as moment from 'moment-timezone';
 @Injectable()
 export class CheckoutService {
   calculatePickupDate(orderTimestamp: string) {
-    if (!moment(orderTimestamp).isValid()) {
+    const orderTime = moment.tz(orderTimestamp, 'Africa/Harare');
+    
+    if (!orderTime.isValid()) {
       throw new BadRequestException('Invalid timestamp');
     }
 
-    const orderTime = moment.tz(orderTimestamp, 'Africa/Harare');
     const orderDay = orderTime.day(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
 
     let deliveryDaysOffset = 0;
