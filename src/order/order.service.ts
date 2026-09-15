@@ -230,6 +230,74 @@ export class OrderService {
       }
     );
 
+    // Group products by seller for notifications
+    try {
+      const sellerProductsMap = new Map<string, { user: any, products: any[] }>();
+      const allProducts = [];
+      
+      for (const item of order.products) {
+        if (!item.product) continue;
+        
+        const seller = item.product.brand?.user;
+        const productDetails = {
+          name: item.product.name,
+          quantity: item.quantity,
+          price: item.totalPrice,
+        };
+        allProducts.push(productDetails);
+        
+        if (seller && seller.email) {
+          if (!sellerProductsMap.has(seller.id)) {
+            sellerProductsMap.set(seller.id, { user: seller, products: [] });
+          }
+          sellerProductsMap.get(seller.id)?.products.push(productDetails);
+        }
+      }
+
+      const shippingMethod = order.fulfillmentType === "PICKUP" ? "Pickup in Harare" : "Delivery";
+      const orderDate = order.createdAt.toLocaleDateString();
+      const customerName = order.user?.name || "Customer";
+
+      // Send Customer Email
+      if (order.email) {
+        this.mailerService.sendMail({
+          email: order.email,
+          subject: `Order Confirmation – Order #${order.id}`,
+          mail_file: 'customer_order_mail.ejs',
+          data: {
+            customerName: customerName,
+            orderId: order.id,
+            orderDate: orderDate,
+            customerAddress: order.address,
+            products: allProducts,
+            totalAmount: order.totalAmount,
+            shippingMethod: shippingMethod,
+          }
+        }).catch(err => console.error("[EMAIL_ERROR] Failed to send customer email", err));
+      }
+
+      // Send Seller Emails
+      for (const [sellerId, data] of sellerProductsMap.entries()) {
+        this.mailerService.sendMail({
+          email: data.user.email,
+          subject: `New Order Notification – Order #${order.id}`,
+          mail_file: 'order_creation_mail.ejs',
+          data: {
+            sellerName: data.user.name,
+            orderId: order.id,
+            orderDate: orderDate,
+            customerName: customerName,
+            customerAddress: order.address,
+            products: data.products,
+            totalAmount: data.products.reduce((acc, p) => acc + p.price, 0),
+            shippingMethod: shippingMethod,
+          }
+        }).catch(err => console.error("[EMAIL_ERROR] Failed to send seller email", err));
+      }
+    } catch (err) {
+      console.error("[EMAIL_ERROR] Error constructing email notifications", err);
+    }
+
     return order;
   }
 
