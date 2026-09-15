@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Order Confirmation</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; }
+        .logo { text-align: center; margin-bottom: 30px; }
+        .logo img { width: 120px; height: 160px; }
+        h1 { font-size: 20px; margin-bottom: 20px; }
+        .section { margin-bottom: 30px; }
+        .order-details { margin-left: 20px; }
+        .order-item { margin: 5px 0; }
+        .support { color: #FF9500; font-weight: bold; }
+        .important { background-color: #f9f9f9; padding: 15px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <div class="logo">
+        <img src="Buy Box orange.png" alt="BuyBox Logo">
+    </div>
+    <h1>Subject: Order Confirmation – Order #<%= orderId %></h1>
+    <p>Hi <%= customerName %>,</p>
+    <p>Thank you for shopping with BuyBox! Your order has been successfully placed. Here are your order details:</p>
+    <div class="section">
+        <h2>Order Details</h2>
+        <div class="order-details">
+            <div class="order-item">• Order ID: <%= orderId %></div>
+            <div class="order-item">• Order Date: <%= orderDate %></div>
+            <div class="order-item">• <%= shippingMethod === 'Delivery' ? 'Delivery Address' : 'Pickup Location' %>: <%= customerAddress %></div>
+            <div class="order-item">• Item(s) Ordered:</div>
+            <% products.forEach(function(product) { %>
+                <div class="order-item">• <%= product.name %> – <%= product.quantity %> – $<%= product.price.toFixed(2) %></div>
+            <% }); %>
+            <div class="order-item">• Order Total: $<%= totalAmount.toFixed(2) %></div>
+            <div class="order-item">• Shipping Method: <%= shippingMethod %></div>
+        </div>
+    </div>
+    <div class="section important">
+        <h2>What's next?</h2>
+        <div class="order-details">
+            <div class="order-item">• We will notify you once your order is ready for pickup or out for delivery.</div>
+            <div class="order-item">• You can check your order status anytime by logging into your account.</div>
+        </div>
+    </div>
+    <p>Thank you for choosing BuyBox!</p>
+    <p>Best regards,<br><span class="support">BuyBox Support</span></p>
+</body>
+</html>
