@@ -8,6 +8,7 @@ interface LogUserEventInput {
   type: UserEventType;
   productId?: string;
   categoryId?: string;
+  subCategoryId?: string;
   device?: string;
   platform?: string;
   source?: string;
@@ -19,12 +20,15 @@ export class EventsService {
   constructor(private prisma: PrismaService) {}
 
   async logUserEvent(data: LogUserEventInput) {
-    if (!data.categoryId && data.productId) {
+    if ((!data.subCategoryId || !data.categoryId) && data.productId) {
       const product = await this.prisma.product.findUnique({
         where: { id: data.productId },
-        select: { categoryId: true },
+        select: { subCategoryId: true, categoryId: true },
       });
-      if (product?.categoryId) {
+      if (!data.subCategoryId && product?.subCategoryId) {
+        data.subCategoryId = product.subCategoryId;
+      }
+      if (!data.categoryId && product?.categoryId) {
         data.categoryId = product.categoryId;
       }
     }
