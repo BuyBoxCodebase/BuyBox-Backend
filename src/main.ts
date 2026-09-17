@@ -14,6 +14,7 @@ const ALLOWED_ORIGINS = [
   'http://localhost:3000',
   'http://localhost:3001',
   "https://treides.com",
+  "https://www.treides.com",
   "https://sell.treides.com",
   "https://admin.treides.com"
   ];
