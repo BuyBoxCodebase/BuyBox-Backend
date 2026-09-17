@@ -1401,4 +1401,4 @@ export class ProductService {
     // Wrap in { product } to match the snapshot envelope the frontend expects
     return productIds.map((id) => ({ product: byId.get(id) })).filter((s) => s.product);
   }
-}
+}

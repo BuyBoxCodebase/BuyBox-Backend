@@ -627,7 +627,8 @@ model UserSegment {
 
 model PopularProductSnapshot {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  subCategoryId String   @db.ObjectId  // subcategory is the real signal
+  categoryId    String   @db.ObjectId
+  subCategoryId String?  @db.ObjectId  // subcategory is the real signal
   segmentId     Int?                   // null = global ranking / fallback for anonymous customers
   productId     String   @db.ObjectId
   rank          Int
