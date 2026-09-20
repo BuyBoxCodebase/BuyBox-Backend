@@ -25,6 +25,8 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { createKeyv } from '@keyv/redis';
 import { LocationModule } from './location/location.module';
 import { CheckoutModule } from './checkout/checkout.module';
+import { LinoModule } from './lino/lino.module';
+
 @Module({
   imports: [
     ConfigModule.forRoot(),
@@ -65,6 +67,7 @@ import { CheckoutModule } from './checkout/checkout.module';
     EventsModule,
     LocationModule,
     CheckoutModule,
+    LinoModule,
   ],
   controllers: [],
   providers: [],
