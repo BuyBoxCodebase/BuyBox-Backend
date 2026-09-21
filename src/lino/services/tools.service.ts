@@ -1,20 +1,29 @@
-import { Injectable } from '@nestjs/common';
-import { tool, jsonSchema } from 'ai';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { SearchService } from './search.service';
 import { IntentService } from './intent.service';
 
 @Injectable()
-export class ToolsService {
+export class ToolsService implements OnModuleInit {
+  private readonly logger = new Logger(ToolsService.name);
+  private ai: any;
+
   constructor(
     private readonly searchService: SearchService,
     private readonly intentService: IntentService
   ) {}
 
+  async onModuleInit() {
+    this.ai = await eval(`import('ai')`);
+  }
+
   getTools(lastUserMessage: string) {
+    if (!this.ai) throw new Error('AI module not initialized');
+    const { tool, jsonSchema } = this.ai;
+
     return {
       search_products: tool({
         description: 'Search the product catalog based on the user\'s raw query. Automatically parses intent and returns matched products.',
-        parameters: jsonSchema<{ rawQuery: string }>({
+        parameters: jsonSchema({
           type: 'object',
           properties: {
             rawQuery: {
@@ -43,7 +52,7 @@ export class ToolsService {
       // Other tools like check_stock, check_size can be added here
       check_stock: tool({
         description: 'Check if a specific product variant is in stock.',
-        parameters: jsonSchema<{ productId: string }>({
+        parameters: jsonSchema({
           type: 'object',
           properties: {
             productId: { type: 'string' }

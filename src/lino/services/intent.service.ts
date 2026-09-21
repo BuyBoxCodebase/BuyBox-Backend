@@ -1,15 +1,21 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { generateObject } from 'ai';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { AiProviderService } from './ai-provider.service';
 import { IntentSchema, Intent } from '../dto/intent.schema';
 
 @Injectable()
-export class IntentService {
+export class IntentService implements OnModuleInit {
   private readonly logger = new Logger(IntentService.name);
+  private ai: any;
 
-  constructor(private readonly aiProvider: AiProviderService) { }
+  constructor(private readonly aiProvider: AiProviderService) {}
 
-  async parseIntent(query: string): Promise<Intent> {
+  async onModuleInit() {
+    this.ai = await eval(`import('ai')`);
+  }
+
+  async parseIntent(query: string): Promise<Intent | null> {
+    const { generateObject } = this.ai;
+
     this.logger.log(`Parsing intent for query: ${query}`);
 
     try {

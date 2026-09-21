@@ -1,9 +1,9 @@
-import { Injectable, Inject, Logger } from '@nestjs/common';
+import { Injectable, Inject, Logger, OnModuleInit } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { AiProviderService } from './ai-provider.service';
 import { ToolsService } from './tools.service';
-import { generateText, streamText, ModelMessage, isStepCount } from 'ai';
+import type { ModelMessage } from 'ai';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const LINO_SYSTEM_PROMPT = `You are Lino, the shopping agent for Treides.
@@ -40,8 +40,9 @@ IMPORTANT TONE AND FORMATTING RULES:
 CRITICAL RULE: If you are asked for a product, ALWAYS execute the search_products tool first.`;
 
 @Injectable()
-export class LinoService {
+export class LinoService implements OnModuleInit {
   private readonly logger = new Logger(LinoService.name);
+  private ai: any;
 
   constructor(
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
@@ -49,6 +50,10 @@ export class LinoService {
     private readonly toolsService: ToolsService,
     private readonly prisma: PrismaService,
   ) {}
+
+  async onModuleInit() {
+    this.ai = await eval(`import('ai')`);
+  }
 
   async handleChat(sessionId: string, message: string) {
     let conversation = await this.prisma.linoConversation.findUnique({
@@ -86,6 +91,7 @@ export class LinoService {
     this.logger.log(`Processing chat for session: ${sessionId}`);
 
     try {
+      const { generateText, isStepCount } = this.ai;
       const result = await generateText({
         model,
         system: LINO_SYSTEM_PROMPT,
@@ -203,6 +209,7 @@ export class LinoService {
     this.logger.log(`Processing chat STREAM for session: ${sessionId}`);
 
     try {
+      const { streamText } = this.ai;
       const result = streamText({
         model,
         system: LINO_SYSTEM_PROMPT,
