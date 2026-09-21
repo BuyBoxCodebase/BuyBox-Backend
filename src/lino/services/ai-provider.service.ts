@@ -39,6 +39,7 @@ export class AiProviderService {
       
       const openai = createOpenAI({ apiKey });
       // Using gpt-4o-mini for fast, cheap agentic loops, or gpt-4o for complex tasks
+      // this.model = openai('gpt-5.6-luna');
       this.model = openai('gpt-4o-mini');
       this.logger.log('Initialized OpenAI Provider');
     }

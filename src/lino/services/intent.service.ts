@@ -26,8 +26,8 @@ and return it according to the provided schema.
 
 1. Extract only information supported by the user's words.
 2. NEVER guess or infer information that is not stated.
-3. If a field is not mentioned, OMIT that field entirely.
-4. NEVER use null, empty strings, 0, -1, "none", "unknown", or similar placeholders.
+3. If a field is not mentioned, return null for that field.
+4. NEVER use empty strings, 0, -1, "none", "unknown", or similar placeholders.
 5. Do not invent product categories.
 6. Do not infer gender from the product.
 7. Do not infer a brand from a product name unless the brand is explicitly present.

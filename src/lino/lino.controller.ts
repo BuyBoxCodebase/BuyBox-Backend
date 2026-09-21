@@ -1,4 +1,4 @@
-import { Controller, Post, Body, Res } from '@nestjs/common';
+import { Controller, Post, Body, Res, Get, Param } from '@nestjs/common';
 import { Response } from 'express';
 import { LinoService } from './services/lino.service';
 import { ChatRequestDto } from './dto/chat-request.dto';
@@ -15,5 +15,16 @@ export class LinoController {
   @Post('chat-stream')
   async chatStream(@Body() chatRequest: ChatRequestDto, @Res() res: Response) {
     return this.linoService.handleChatStream(chatRequest.sessionId, chatRequest.message, res);
+  }
+
+  // Admin Routes for Chat History
+  @Get('admin/conversations')
+  async getConversations() {
+    return this.linoService.getAllConversations();
+  }
+
+  @Get('admin/conversations/:sessionId')
+  async getConversationDetails(@Param('sessionId') sessionId: string) {
+    return this.linoService.getConversationDetails(sessionId);
   }
 }

@@ -687,3 +687,23 @@ model UserEvent {
   @@index([subCategoryId, type])
   @@index([sessionId])
 }
+
+model LinoConversation {
+  id         String        @id @default(auto()) @map("_id") @db.ObjectId
+  sessionId  String        @unique
+  messages   LinoMessage[]
+  
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+}
+
+model LinoMessage {
+  id                 String           @id @default(auto()) @map("_id") @db.ObjectId
+  linoConversationId String           @db.ObjectId
+  conversation       LinoConversation @relation(fields: [linoConversationId], references: [id], onDelete: Cascade)
+  role               String           // 'user', 'assistant', 'system'
+  content            String
+  metadata           Json?            // store products etc.
+  
+  createdAt          DateTime         @default(now())
+}

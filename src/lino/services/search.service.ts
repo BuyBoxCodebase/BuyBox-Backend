@@ -24,10 +24,10 @@ export class SearchService {
       ];
     }
 
-    if (intent.minPrice !== undefined || intent.maxPrice !== undefined) {
+    if (intent.minPrice != null || intent.maxPrice != null) {
       whereClause.basePrice = {};
-      if (intent.minPrice !== undefined) whereClause.basePrice.gte = intent.minPrice;
-      if (intent.maxPrice !== undefined) whereClause.basePrice.lte = intent.maxPrice;
+      if (intent.minPrice != null) whereClause.basePrice.gte = intent.minPrice;
+      if (intent.maxPrice != null) whereClause.basePrice.lte = intent.maxPrice;
     }
 
     // We can also join variants if we need to filter by size or color

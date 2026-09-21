@@ -3,66 +3,68 @@ import { z } from 'zod';
 export const IntentSchema = z.object({
   label: z
     .string()
-    .optional()
-    .describe('Broad search intent or keyword explicitly mentioned by the user'),
+    .nullable()
+    .describe('Broad search intent or keyword explicitly mentioned by the user, or null if none'),
 
   product: z
     .string()
-    .optional()
-    .describe('Specific product explicitly mentioned by the user'),
+    .nullable()
+    .describe('Specific product explicitly mentioned by the user, or null if none'),
 
   category: z
     .string()
-    .optional()
-    .describe('Product category explicitly mentioned or clearly stated by the user'),
+    .nullable()
+    .describe('Product category explicitly mentioned or clearly stated by the user, or null if none'),
 
   brand: z
     .string()
-    .optional()
-    .describe('Brand explicitly mentioned by the user'),
+    .nullable()
+    .describe('Brand explicitly mentioned by the user, or null if none'),
 
   colour: z
     .string()
-    .optional()
-    .describe('Color explicitly mentioned by the user'),
+    .nullable()
+    .describe('Color explicitly mentioned by the user, or null if none'),
 
   occasion: z
     .string()
-    .optional()
-    .describe('Occasion explicitly mentioned by the user'),
+    .nullable()
+    .describe('Occasion explicitly mentioned by the user, or null if none'),
 
   gender: z
     .string()
-    .optional()
-    .describe('Gender explicitly mentioned by the user'),
+    .nullable()
+    .describe('Gender explicitly mentioned by the user, or null if none'),
 
   size: z
     .string()
-    .optional()
-    .describe('Size explicitly mentioned by the user'),
+    .nullable()
+    .describe('Size explicitly mentioned by the user, or null if none'),
 
   minPrice: z
     .number()
-    .optional()
-    .describe('Minimum price explicitly stated by the user'),
+    .nullable()
+    .describe('Minimum price explicitly stated by the user, or null if none'),
 
   maxPrice: z
     .number()
-    .optional()
-    .describe('Maximum price explicitly stated by the user'),
+    .nullable()
+    .describe('Maximum price explicitly stated by the user, or null if none'),
 
   currency: z
     .string()
-    .optional()
-    .describe('Currency explicitly stated or unambiguously represented by the user'),
+    .nullable()
+    .describe('Currency explicitly stated or unambiguously represented by the user, or null if none'),
 
   deliveryDate: z
     .string()
-    .optional()
-    .describe('Delivery deadline explicitly requested by the user'),
+    .nullable()
+    .describe('Delivery deadline explicitly requested by the user, or null if none'),
 
   sortPreference: z
     .string()
-    .optional()
-    .describe('Sorting preference explicitly requested by the user')
+    .nullable()
+    .describe('Sorting preference explicitly requested by the user, or null if none')
 });
+
+export type Intent = z.infer<typeof IntentSchema>;

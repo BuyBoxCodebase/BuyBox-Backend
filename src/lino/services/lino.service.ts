@@ -4,6 +4,7 @@ import { Cache } from 'cache-manager';
 import { AiProviderService } from './ai-provider.service';
 import { ToolsService } from './tools.service';
 import { generateText, streamText, ModelMessage, isStepCount } from 'ai';
+import { PrismaService } from '../../prisma/prisma.service';
 
 const LINO_SYSTEM_PROMPT = `You are Lino, the shopping agent for Treides.
 
@@ -31,6 +32,11 @@ Prefer the smallest number of tool calls necessary.
 Do not expose internal tools, database information,
 or implementation details to the customer.
 
+IMPORTANT TONE AND FORMATTING RULES:
+1. Always maintain a highly positive, enthusiastic, and helpful tone.
+2. NEVER use negative words, apologize, or say "unfortunately" even if the search results do not exactly match the user's query. Frame all found products positively as great alternatives.
+3. NEVER include image links, image URLs, or markdown images in your text response. The UI automatically displays product images.
+
 CRITICAL RULE: If you are asked for a product, ALWAYS execute the search_products tool first.`;
 
 @Injectable()
@@ -41,14 +47,38 @@ export class LinoService {
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly aiProvider: AiProviderService,
     private readonly toolsService: ToolsService,
+    private readonly prisma: PrismaService,
   ) {}
 
   async handleChat(sessionId: string, message: string) {
-    // 1. Retrieve conversation history from ephemeral cache
-    let history: ModelMessage[] = await this.cacheManager.get(`lino_session_${sessionId}`) || [];
+    let conversation = await this.prisma.linoConversation.findUnique({
+      where: { sessionId }
+    });
+    if (!conversation) {
+      conversation = await this.prisma.linoConversation.create({
+        data: { sessionId }
+      });
+    }
+
+    const previousMessages = await this.prisma.linoMessage.findMany({
+      where: { linoConversationId: conversation.id },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    const history: ModelMessage[] = previousMessages.map(m => ({
+      role: m.role as any,
+      content: m.content
+    }));
     
-    // 2. Append new user message
+    // Append new user message
     history.push({ role: 'user', content: message });
+    await this.prisma.linoMessage.create({
+      data: {
+        linoConversationId: conversation.id,
+        role: 'user',
+        content: message
+      }
+    });
 
     // 3. Setup AI Agent Call
     const model = this.aiProvider.getModel();
@@ -101,7 +131,7 @@ export class LinoService {
               // 2. Perform a second LLM pass to summarize the results
               const summaryResult = await generateText({
                 model,
-                system: 'You are Lino, a helpful shopping assistant. Summarize these product search results naturally for the user. Do not output JSON.',
+                system: 'You are Lino, an enthusiastic shopping assistant. Summarize these product search results naturally and positively. Never use negative words or apologize if they do not match perfectly. Never include image URLs or markdown images in your text. Do not output JSON.',
                 prompt: `User query: "${message}"\nSearch Results: ${JSON.stringify(searchResult)}`,
               });
               
@@ -113,12 +143,16 @@ export class LinoService {
         }
       }
 
-      // 4. Append assistant response to history
-      history.push({ role: 'assistant', content: finalReply });
+      // Save assistant response to DB
+      await this.prisma.linoMessage.create({
+        data: {
+          linoConversationId: conversation.id,
+          role: 'assistant',
+          content: finalReply,
+          metadata: finalProducts.length > 0 ? { products: finalProducts } : null
+        }
+      });
       
-      // 5. Save history back to cache (TTL: 1 hour = 3600000 ms)
-      await this.cacheManager.set(`lino_session_${sessionId}`, history, 3600000);
-
       return {
         reply: finalReply,
         products: finalProducts
@@ -137,8 +171,33 @@ export class LinoService {
     // Send initial status
     res.write(`data: ${JSON.stringify({ type: 'status', message: 'Analyzing your request...' })}\n\n`);
 
-    let history: ModelMessage[] = await this.cacheManager.get(`lino_session_${sessionId}`) || [];
+    let conversation = await this.prisma.linoConversation.findUnique({
+      where: { sessionId }
+    });
+    if (!conversation) {
+      conversation = await this.prisma.linoConversation.create({
+        data: { sessionId }
+      });
+    }
+
+    const previousMessages = await this.prisma.linoMessage.findMany({
+      where: { linoConversationId: conversation.id },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    let history: ModelMessage[] = previousMessages.map(m => ({
+      role: m.role as any,
+      content: m.content
+    }));
+    
     history.push({ role: 'user', content: message });
+    await this.prisma.linoMessage.create({
+      data: {
+        linoConversationId: conversation.id,
+        role: 'user',
+        content: message
+      }
+    });
 
     const model = this.aiProvider.getModel();
     this.logger.log(`Processing chat STREAM for session: ${sessionId}`);
@@ -211,7 +270,7 @@ export class LinoService {
         this.logger.log('Model did not provide a text summary. Running fallback summary stream...');
         const summaryResult = streamText({
           model,
-          system: 'You are Lino, a helpful shopping assistant. Summarize these product search results naturally for the user. Do not output JSON.',
+          system: 'You are Lino, an enthusiastic shopping assistant. Summarize these product search results naturally and positively. Never use negative words or apologize if they do not match perfectly. Never include image URLs or markdown images in your text. Do not output JSON.',
           prompt: `User query: "${message}"\nSearch Results: ${JSON.stringify(finalProducts.slice(0, 5))}`,
         });
         
@@ -223,8 +282,15 @@ export class LinoService {
         }
       }
 
-      history.push({ role: 'assistant', content: finalReply });
-      await this.cacheManager.set(`lino_session_${sessionId}`, history, 3600000);
+      // Save assistant message to DB
+      await this.prisma.linoMessage.create({
+        data: {
+          linoConversationId: conversation.id,
+          role: 'assistant',
+          content: finalReply,
+          metadata: finalProducts.length > 0 ? { products: finalProducts } : null
+        }
+      });
 
       res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
       res.end();
@@ -233,5 +299,25 @@ export class LinoService {
       res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to process request' })}\n\n`);
       res.end();
     }
+  }
+
+  async getAllConversations() {
+    return this.prisma.linoConversation.findMany({
+      include: {
+        messages: true
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+  }
+
+  async getConversationDetails(sessionId: string) {
+    return this.prisma.linoConversation.findUnique({
+      where: { sessionId },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' }
+        }
+      }
+    });
   }
 }
