@@ -55,3 +55,13 @@ export class AiProviderService implements OnModuleInit {
     return this.model;
   }
 }
+
+// Vercel NFT (Node File Trace) Hack:
+// Because we use eval('import(...)') to bypass TypeScript's CommonJS compilation (which causes ERR_REQUIRE_ESM),
+// Vercel's bundler fails to see that we need these packages and drops them from the serverless deployment.
+// This dead-code block forces @vercel/nft to include the packages in the final AWS Lambda bundle.
+if (process.env.VERCEL_NFT_HACK === 'true') {
+  require('ai');
+  require('@ai-sdk/openai');
+  require('@ai-sdk/google');
+}
