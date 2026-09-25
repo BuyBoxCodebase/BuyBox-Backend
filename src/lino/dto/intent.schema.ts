@@ -6,15 +6,15 @@ export const IntentSchema = z.object({
     .nullable()
     .describe('Broad search intent or keyword explicitly mentioned by the user, or null if none'),
 
-  product: z
+  productName: z
     .string()
     .nullable()
-    .describe('Specific product explicitly mentioned by the user, or null if none'),
+    .describe('Specific product name explicitly mentioned by the user (e.g. "puma 350", "iphone 14"). NOTE: generic terms like "shoes", "sneaker", or "gym" are NOT product names. If only generic terms are used, return null for productName.'),
 
   category: z
-    .string()
+    .enum(['Sneakers', 'Training', 'Lifestyle', 'Basketball', 'Running'])
     .nullable()
-    .describe('Product category explicitly mentioned or clearly stated by the user, or null if none'),
+    .describe('Product category explicitly mentioned. If no match, return null.'),
 
   brand: z
     .string()
@@ -39,7 +39,7 @@ export const IntentSchema = z.object({
   size: z
     .string()
     .nullable()
-    .describe('Size explicitly mentioned by the user, or null if none'),
+    .describe('Exact size value explicitly mentioned by the user (e.g., "8", "XL", "42"). Extract ONLY the value without surrounding words like "size" or "use", or null if none'),
 
   minPrice: z
     .number()

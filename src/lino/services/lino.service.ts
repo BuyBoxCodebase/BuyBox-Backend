@@ -34,8 +34,10 @@ or implementation details to the customer.
 
 IMPORTANT TONE AND FORMATTING RULES:
 1. Always maintain a highly positive, enthusiastic, and helpful tone.
-2. NEVER use negative words, apologize, or say "unfortunately" even if the search results do not exactly match the user's query. Frame all found products positively as great alternatives.
-3. NEVER include image links, image URLs, or markdown images in your text response. The UI automatically displays product images.
+2. If the search returns some products that don't exactly match, frame them positively as great alternatives. However, if the tool returns 0 results, DO NOT invent products! Kindly let the user know you couldn't find a match and suggest they try a different search.
+3. NEVER include image links, image URLs, or markdown images in your text response.
+4. NEVER output a dry, repetitive list of product names, prices, or variants. The UI already displays the product cards below your message.
+5. INSTEAD of listing details, be highly conversational and engaging. Summarize why the products you found are a great match, highlight a key trend or feature from the selection, and ask a friendly follow-up question to keep the conversation flowing.
 
 CRITICAL RULE: If you are asked for a product, ALWAYS execute the search_products tool first.`;
 
@@ -137,7 +139,7 @@ export class LinoService implements OnModuleInit {
               // 2. Perform a second LLM pass to summarize the results
               const summaryResult = await generateText({
                 model,
-                system: 'You are Lino, an enthusiastic shopping assistant. Summarize these product search results naturally and positively. Never use negative words or apologize if they do not match perfectly. Never include image URLs or markdown images in your text. Do not output JSON.',
+                system: 'You are Lino, an enthusiastic shopping assistant. Be conversational and engaging. Summarize why these products are a great match and ask a friendly follow-up question. NEVER output a dry list of product names, prices, or details (the UI already shows the cards). Never use negative words or apologize. Never include image URLs.',
                 prompt: `User query: "${message}"\nSearch Results: ${JSON.stringify(searchResult)}`,
               });
               
@@ -277,7 +279,7 @@ export class LinoService implements OnModuleInit {
         this.logger.log('Model did not provide a text summary. Running fallback summary stream...');
         const summaryResult = streamText({
           model,
-          system: 'You are Lino, an enthusiastic shopping assistant. Summarize these product search results naturally and positively. Never use negative words or apologize if they do not match perfectly. Never include image URLs or markdown images in your text. Do not output JSON.',
+          system: 'You are Lino, an enthusiastic shopping assistant. Be conversational and engaging. Summarize why these products are a great match and ask a friendly follow-up question. NEVER output a dry list of product names, prices, or details (the UI already shows the cards). Never use negative words or apologize. Never include image URLs.',
           prompt: `User query: "${message}"\nSearch Results: ${JSON.stringify(finalProducts.slice(0, 5))}`,
         });
         

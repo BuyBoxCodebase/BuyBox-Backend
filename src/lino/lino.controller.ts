@@ -17,6 +17,12 @@ export class LinoController {
     return this.linoService.handleChatStream(chatRequest.sessionId, chatRequest.message, res);
   }
 
+  // Customer Route for Chat History
+  @Get('history/:sessionId')
+  async getHistory(@Param('sessionId') sessionId: string) {
+    return this.linoService.getConversationDetails(sessionId);
+  }
+
   // Admin Routes for Chat History
   @Get('admin/conversations')
   async getConversations() {

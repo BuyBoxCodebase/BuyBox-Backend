@@ -162,6 +162,7 @@ model Product {
   basePrice      Float
   attributes     Json?
   labels         String[]         @default([])
+  searchTags     String[]         @default([])
   inventory      Inventory[]
   cartItems      CartItem[]
   orderItems     OrderProduct[]

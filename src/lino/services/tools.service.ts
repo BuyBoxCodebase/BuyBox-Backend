@@ -40,8 +40,8 @@ export class ToolsService implements OnModuleInit {
           
           // Parse the raw query into a structured Intent
           const intent = await this.intentService.parseIntent(rawQuery);
-          // Query the DB
-          const results = await this.searchService.searchProducts(intent);
+          // Query the DB using V2 internally
+          const results = await this.searchService.searchProductsV2(intent);
           return {
             intent_understood: intent,
             results_found: results.length,
