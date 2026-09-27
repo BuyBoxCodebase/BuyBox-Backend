@@ -1,4 +1,4 @@
-import { PaymentMode } from "@prisma/client";
+import { PaymentMode, FulfillmentType } from "@prisma/client";
 
 class OrderProduct {
     productId: string;
@@ -13,4 +13,8 @@ export class CreateOrderDto {
     paymentMode: PaymentMode;
     cartId?: string;
     products?: OrderProduct;
+    fulfillmentType?: FulfillmentType;
+    pickupLocationId?: string;
+    pickupDate?: string;
+    pickupFee?: number;
 }

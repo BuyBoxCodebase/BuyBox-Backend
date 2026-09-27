@@ -1,6 +1,10 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { SchedulerRegistry } from '@nestjs/schedule';
 import { CronJob } from 'cron';
+import { PrismaService } from '../prisma/prisma.service';
+import { MockNotificationService } from './mock-notification.service';
+import * as moment from 'moment-timezone';
+import { OrderStatus } from '@prisma/client';
 
 @Injectable()
 export class SchedulerService implements OnModuleInit, OnModuleDestroy {
@@ -9,10 +13,87 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     private cronJobMap: Map<string, CronJob> = new Map();
     private jobCount = 0;
 
-    constructor(private schedulerRegistry: SchedulerRegistry) { }
+    constructor(
+        private schedulerRegistry: SchedulerRegistry,
+        private prisma: PrismaService,
+        private notificationService: MockNotificationService
+    ) { }
 
     onModuleInit() {
         this.logger.log('Scheduler service initialized');
+        this.registerPickupNotifications();
+    }
+
+    private registerPickupNotifications() {
+        // Daily Ready Notification at 7am
+        this.scheduleRecurringJob('0 7 * * *', async () => {
+            this.logger.debug('Running Daily Ready Notification Job');
+            const tomorrow = moment.tz('Africa/Harare').add(1, 'day').startOf('day');
+            const endOfTomorrow = moment.tz('Africa/Harare').add(1, 'day').endOf('day');
+
+            const orders = await this.prisma.order.findMany({
+                where: {
+                    fulfillmentType: 'PICKUP',
+                    status: { notIn: [OrderStatus.COMPLETED, OrderStatus.CANCELED] },
+                    pickupDate: {
+                        gte: tomorrow.toDate(),
+                        lte: endOfTomorrow.toDate(),
+                    },
+                },
+                include: { pickupLocation: true }
+            });
+
+            for (const order of orders) {
+                if (order.pickupLocation) {
+                    await this.prisma.order.update({
+                        where: { id: order.id },
+                        data: { status: 'READY_FOR_PICKUP' }
+                    });
+                    const subject = `Your Treides order is ready!`;
+                    let content = `Your Treides order is ready!\n${order.pickupLocation.name}\nOpen 9am - 4pm\n(Closed Sundays)\n`;
+                    if (order.pickupLocation.coordinates) {
+                        const coords = order.pickupLocation.coordinates as any;
+                        if (coords.latitude && coords.longitude) {
+                            content += `Get Directions: https://maps.google.com/?q=${coords.latitude},${coords.longitude}`;
+                        }
+                    }
+                    await this.notificationService.sendEmail(order.email, subject, content);
+                    await this.notificationService.sendSms(order.phoneNumber, content);
+                }
+            }
+        }, 'DailyReadyNotification', 'Africa/Harare');
+
+        // Pickup Reminder at 8am
+        this.scheduleRecurringJob('0 8 * * *', async () => {
+            this.logger.debug('Running Pickup Reminder Job');
+            const today = moment.tz('Africa/Harare').startOf('day');
+            const endOfToday = moment.tz('Africa/Harare').endOf('day');
+
+            const orders = await this.prisma.order.findMany({
+                where: {
+                    fulfillmentType: 'PICKUP',
+                    status: 'READY_FOR_PICKUP',
+                    pickupDate: {
+                        gte: today.toDate(),
+                        lte: endOfToday.toDate(),
+                    },
+                },
+                include: { pickupLocation: true }
+            });
+
+            for (const order of orders) {
+                if (order.pickupLocation) {
+                    let content = `Reminder: Pick up your Treides order today!\n${order.pickupLocation.name}, 9am-4pm\n`;
+                    if (order.pickupLocation.coordinates) {
+                        const coords = order.pickupLocation.coordinates as any;
+                        if (coords.latitude && coords.longitude) {
+                            content += `Get Directions: https://maps.google.com/?q=${coords.latitude},${coords.longitude}`;
+                        }
+                    }
+                    await this.notificationService.sendSms(order.phoneNumber, content);
+                }
+            }
+        }, 'PickupReminder', 'Africa/Harare');
     }
 
     onModuleDestroy() {
@@ -57,21 +138,28 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         return jobId;
     }
 
-    scheduleRecurringJob(cronExpression: string, callback: () => void, name?: string): string {
+    scheduleRecurringJob(cronExpression: string, callback: () => void, name?: string, timeZone?: string): string {
         const jobId = name || `recurring_job_${++this.jobCount}`;
 
         try {
-            const job = new CronJob(cronExpression, async () => {
-                try {
-                    this.logger.debug(`Executing recurring job: ${jobId}`);
-                    await callback();
-                } catch (error) {
-                    this.logger.error(`Error executing recurring job ${jobId}: ${error.message}`, error.stack);
-                }
-            });
+            const job = new CronJob(
+                cronExpression,
+                async () => {
+                    try {
+                        this.logger.debug(`Executing recurring job: ${jobId}`);
+                        await callback();
+                    } catch (error) {
+                        this.logger.error(`Error executing recurring job ${jobId}: ${error.message}`, error.stack);
+                    }
+                },
+                null,
+                true,
+                timeZone || Intl.DateTimeFormat().resolvedOptions().timeZone
+            );
 
             this.cronJobMap.set(jobId, job);
-            job.start();
+            // job.start(); is automatically handled by the 4th parameter (true) or we can call start if we set it to false.
+            // Since we set it to true, it starts immediately.
 
             this.logger.debug(`Scheduled recurring job ${jobId} with cron expression: ${cronExpression}`);
             return jobId;

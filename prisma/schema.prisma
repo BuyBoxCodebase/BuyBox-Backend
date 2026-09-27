@@ -263,6 +263,12 @@ model Order {
   deliveryAgent   DeliveryAgent? @relation(fields: [deliveryAgentId], references: [id])
   conversations   Conversation[]
 
+  fulfillmentType FulfillmentType @default(DELIVERY)
+  pickupLocationId String?        @db.ObjectId
+  pickupLocation   Location?      @relation(fields: [pickupLocationId], references: [id])
+  pickupDate      DateTime?
+  pickupFee       Float?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -285,7 +291,28 @@ enum OrderStatus {
   COMPLETED
   CANCELED
   OUT_OF_STOCK
+  READY_FOR_PICKUP
 }
+
+enum FulfillmentType {
+  DELIVERY
+  PICKUP
+}
+
+model Location {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  name           String
+  coordinates    Json
+  address        String
+  operatingHours Json
+  deliveryDays   String[]
+  pickupFee      Float    @default(0)
+  orders         Order[]
+  
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
 
 model Notification {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
@@ -601,7 +628,8 @@ model UserSegment {
 
 model PopularProductSnapshot {
   id            String   @id @default(auto()) @map("_id") @db.ObjectId
-  subCategoryId String   @db.ObjectId  // subcategory is the real signal
+  categoryId    String   @db.ObjectId
+  subCategoryId String?  @db.ObjectId  // subcategory is the real signal
   segmentId     Int?                   // null = global ranking / fallback for anonymous customers
   productId     String   @db.ObjectId
   rank          Int
@@ -662,19 +690,21 @@ model UserEvent {
 }
 
 model LinoConversation {
-  id        String        @id @default(auto()) @map("_id") @db.ObjectId
-  sessionId String        @unique
-  messages  LinoMessage[]
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  id         String        @id @default(auto()) @map("_id") @db.ObjectId
+  sessionId  String        @unique
+  messages   LinoMessage[]
+  
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
 }
 
 model LinoMessage {
   id                 String           @id @default(auto()) @map("_id") @db.ObjectId
   linoConversationId String           @db.ObjectId
   conversation       LinoConversation @relation(fields: [linoConversationId], references: [id], onDelete: Cascade)
-  role               String
+  role               String           // 'user', 'assistant', 'system'
   content            String
-  metadata           Json?
+  metadata           Json?            // store products etc.
+  
   createdAt          DateTime         @default(now())
 }

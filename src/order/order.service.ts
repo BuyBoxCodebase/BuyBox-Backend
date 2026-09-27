@@ -12,7 +12,7 @@ export class OrderService {
   ) { }
 
   async createOrder(userId: string, createOrderDto: CreateOrderDto) {
-    const { email, address, phoneNumber, paymentMode, products, cartId } = createOrderDto;
+    const { email, address, phoneNumber, paymentMode, products, cartId, fulfillmentType, pickupLocationId, pickupDate, pickupFee } = createOrderDto;
 
     const order = await this.prisma.$transaction(
       async (prisma) => {
@@ -36,9 +36,10 @@ export class OrderService {
             throw new Error("Cart not found or is empty");
           }
 
-          console.log('Calculating total amount..');
           totalAmount = cart.products.reduce((sum, item) => sum + item.totalPrice, 0);
-          console.log('Calculated total amount');
+          if (pickupFee) {
+            totalAmount += pickupFee;
+          }
 
           // Process each cart item based on whether it has a variant or not
           for (const item of cart.products) {
@@ -98,7 +99,6 @@ export class OrderService {
             where: { cartId: cart.id },
           });
           await prisma.cart.delete({ where: { id: cartId } });
-          console.log('Cart cleared');
         } else if (products) {
           const { productId, variantId, quantity } = products;
 
@@ -176,6 +176,9 @@ export class OrderService {
 
           const itemTotalPrice = itemPrice * quantity;
           totalAmount = itemTotalPrice;
+          if (pickupFee) {
+            totalAmount += pickupFee;
+          }
 
           orderProductsData.push({
             productId: productId,
@@ -189,16 +192,16 @@ export class OrderService {
 
         const order = await prisma.order.create({
           data: {
-            user: {
-              connect: {
-                id: userId
-              }
-            },
+            userId,
             email,
             phoneNumber,
             address,
             totalAmount,
             paymentMode,
+            fulfillmentType: fulfillmentType || 'DELIVERY',
+            pickupLocationId,
+            pickupDate: pickupDate ? new Date(pickupDate) : undefined,
+            pickupFee,
             products: { create: orderProductsData },
           },
           include: {
@@ -220,13 +223,80 @@ export class OrderService {
           },
         });
 
-        console.log('Order created');
         return order;
       },
       {
         timeout: 10000,
       }
     );
+
+    // Group products by seller for notifications
+    try {
+      const sellerProductsMap = new Map<string, { user: any, products: any[] }>();
+      const allProducts = [];
+      
+      for (const item of order.products) {
+        if (!item.product) continue;
+        
+        const seller = item.product.brand?.user;
+        const productDetails = {
+          name: item.product.name,
+          quantity: item.quantity,
+          price: item.totalPrice,
+        };
+        allProducts.push(productDetails);
+        
+        if (seller && seller.email) {
+          if (!sellerProductsMap.has(seller.id)) {
+            sellerProductsMap.set(seller.id, { user: seller, products: [] });
+          }
+          sellerProductsMap.get(seller.id)?.products.push(productDetails);
+        }
+      }
+
+      const shippingMethod = order.fulfillmentType === "PICKUP" ? "Pickup in Harare" : "Delivery";
+      const orderDate = order.createdAt.toLocaleDateString();
+      const customerName = order.user?.name || "Customer";
+
+      // Send Customer Email
+      if (order.email) {
+        this.mailerService.sendMail({
+          email: order.email,
+          subject: `Order Confirmation – Order #${order.id}`,
+          mail_file: 'customer_order_mail.ejs',
+          data: {
+            customerName: customerName,
+            orderId: order.id,
+            orderDate: orderDate,
+            customerAddress: order.address,
+            products: allProducts,
+            totalAmount: order.totalAmount,
+            shippingMethod: shippingMethod,
+          }
+        }).catch(err => console.error("[EMAIL_ERROR] Failed to send customer email", err));
+      }
+
+      // Send Seller Emails
+      for (const [sellerId, data] of sellerProductsMap.entries()) {
+        this.mailerService.sendMail({
+          email: data.user.email,
+          subject: `New Order Notification – Order #${order.id}`,
+          mail_file: 'order_creation_mail.ejs',
+          data: {
+            sellerName: data.user.name,
+            orderId: order.id,
+            orderDate: orderDate,
+            customerName: customerName,
+            customerAddress: order.address,
+            products: data.products,
+            totalAmount: data.products.reduce((acc, p) => acc + p.price, 0),
+            shippingMethod: shippingMethod,
+          }
+        }).catch(err => console.error("[EMAIL_ERROR] Failed to send seller email", err));
+      }
+    } catch (err) {
+      console.error("[EMAIL_ERROR] Error constructing email notifications", err);
+    }
 
     return order;
   }
@@ -251,6 +321,10 @@ export class OrderService {
         status: true,
         paymentMode: true,
         totalAmount: true,
+        fulfillmentType: true,
+        pickupLocation: true,
+        pickupDate: true,
+        pickupFee: true,
         createdAt: true,
       }
     });
@@ -308,7 +382,8 @@ export class OrderService {
             }
           }
         },
-        deliveryAgent: true
+        deliveryAgent: true,
+        pickupLocation: true
       },
       omit: {
         updatedAt: true,

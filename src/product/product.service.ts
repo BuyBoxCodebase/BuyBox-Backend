@@ -6,6 +6,7 @@ import { UpdateProductDto } from './dto/update-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
 import { revalidateFrontendCache, FrontendApp, CacheTag } from '../../libs/common/src';
+import { generateSearchTags } from './utils/search-tags.util';
 @Injectable()
 export class ProductService {
   constructor(
@@ -29,6 +30,7 @@ export class ProductService {
       options = [],
       defaultVariant,
       generatedVariants = [],
+      labels = [],
     } = data;
 
     const brand = await this.prisma.brand.findUnique({
@@ -44,11 +46,19 @@ export class ProductService {
       };
     }
 
+    if (!labels || labels.length === 0) {
+      return {
+        success: false,
+        message: "At least one label is required",
+      };
+    }
+
+    let fetchedCategory = null;
     if (categoryId) {
-      const category = await this.prisma.category.findUnique({
+      fetchedCategory = await this.prisma.category.findUnique({
         where: { id: categoryId },
       });
-      if (!category) {
+      if (!fetchedCategory) {
         return {
           success: false,
           message: "Category not found",
@@ -56,18 +66,19 @@ export class ProductService {
       }
     }
 
+    let fetchedSubCategory = null;
     if (subCategoryId) {
-      const subCategory = await this.prisma.subCategory.findUnique({
+      fetchedSubCategory = await this.prisma.subCategory.findUnique({
         where: { id: subCategoryId },
       });
-      if (!subCategory) {
+      if (!fetchedSubCategory) {
         return {
           success: false,
           message: "SubCategory not found",
         };
       }
 
-      if (subCategory.categoryId !== categoryId) {
+      if (fetchedSubCategory.categoryId !== categoryId) {
         return {
           success: false,
           message: "SubCategory does not belong to the provided Category",
@@ -77,6 +88,14 @@ export class ProductService {
 
     // Create a transaction to ensure product and default variant are created together
     try {
+      const searchTags = generateSearchTags({
+        brandName: brand.name,
+        categoryName: fetchedCategory?.name,
+        subCategoryName: fetchedSubCategory?.name,
+        options: options,
+        labels: labels,
+      });
+
       const result = await this.prisma.$transaction(async (tx) => {
         // Create the base product
         const newProduct = await tx.product.create({
@@ -84,6 +103,8 @@ export class ProductService {
             brand: { connect: { id: brand.id } },
             name,
             description,
+            labels,
+            searchTags,
             ...(categoryId ? {
               category: {
                 connect: {
@@ -1074,6 +1095,7 @@ export class ProductService {
       subCategoryId,
       basePrice,
       images,
+      labels,
     } = data;
 
     const product = await this.prisma.product.findUnique({
@@ -1082,12 +1104,27 @@ export class ProductService {
         brand: {
           userId: userId
         }
+      },
+      include: {
+        brand: true,
+        category: true,
+        subCategory: true,
+        options: {
+          include: { values: true }
+        }
       }
     });
 
     if (!product) {
       throw new BadRequestException("Error while updating the product");
     }
+
+    if (labels !== undefined && (!Array.isArray(labels) || labels.length === 0)) {
+      throw new BadRequestException("At least one label is required");
+    }
+
+    let fetchedCategory = product.category;
+    let fetchedSubCategory = product.subCategory;
 
     if (categoryId) {
       const category = await this.prisma.category.findUnique({
@@ -1096,6 +1133,7 @@ export class ProductService {
       if (!category) {
         throw new BadRequestException("Category not found");
       }
+      fetchedCategory = category;
 
       if (subCategoryId) {
         const subCategory = await this.prisma.subCategory.findUnique({
@@ -1108,8 +1146,19 @@ export class ProductService {
         if (subCategory.categoryId !== categoryId) {
           throw new BadRequestException("SubCategory does not belong to the provided Category");
         }
+        fetchedSubCategory = subCategory;
+      } else {
+        fetchedSubCategory = null;
       }
     }
+
+    const searchTags = generateSearchTags({
+      brandName: product.brand.name,
+      categoryName: fetchedCategory?.name,
+      subCategoryName: fetchedSubCategory?.name,
+      options: product.options,
+      labels: labels !== undefined ? labels : product.labels,
+    });
 
     const updatedProduct = await this.prisma.product.update({
       where: {
@@ -1129,7 +1178,9 @@ export class ProductService {
           }
         }),
         ...(basePrice && { basePrice: parseFloat(basePrice) }),
-        ...(images && { images })
+        ...(images && { images }),
+        ...(labels && { labels }),
+        searchTags
       }
     });
 
@@ -1386,4 +1437,4 @@ export class ProductService {
     // Wrap in { product } to match the snapshot envelope the frontend expects
     return productIds.map((id) => ({ product: byId.get(id) })).filter((s) => s.product);
   }
-}
+}

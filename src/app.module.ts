@@ -20,11 +20,12 @@ import { SchedulerModule } from './scheduler/scheduler.module';
 import { ChatModule } from './chat/chat.module';
 import { ReelsModule } from './reels/reels.module';
 import { EventsModule } from './events/events.module';
-import { RecommendationsModule } from './recommendations/recommendations.module';
-import { LinoModule } from './lino/lino.module';
 
 import { CacheModule } from '@nestjs/cache-manager';
 import { createKeyv } from '@keyv/redis';
+import { LocationModule } from './location/location.module';
+import { CheckoutModule } from './checkout/checkout.module';
+import { LinoModule } from './lino/lino.module';
 
 @Module({
   imports: [
@@ -64,7 +65,8 @@ import { createKeyv } from '@keyv/redis';
     ChatModule,
     ReelsModule,
     EventsModule,
-    RecommendationsModule,
+    LocationModule,
+    CheckoutModule,
     LinoModule,
   ],
   controllers: [],

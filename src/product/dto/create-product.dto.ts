@@ -34,4 +34,5 @@ export class CreateProductDto {
     options?: ProductOptionDto[];
     defaultVariant?: DefaultVariantDto;
     generatedVariants?: GeneratedVariantDto[];
+    labels?: string[];
 }
