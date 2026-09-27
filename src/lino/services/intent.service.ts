@@ -124,19 +124,13 @@ unless an approved mapping tells you that the product belongs to a specific bran
 
 ---
 
-## 4. CATEGORY
+## 4. SUBCATEGORY
 
-Use only the following categories:
+Extract the product subcategory when the customer's request supports it.
 
-* Sneakers
-* Training
-* Lifestyle
-* Basketball
-* Running
+Use the catalogue's subcategory name when it is known. Do not substitute a top-level category or invent a subcategory.
 
-Only assign a category when the customer's request supports it.
-
-Do not force a category simply because a product is commonly associated with one.
+If the request only identifies a broad product type and the matching subcategory is unclear, return null.
 
 ---
 
@@ -353,7 +347,7 @@ Return exactly this JSON structure:
 {
 "productName": null,
 "brand": null,
-"category": null,
+"subCategory": null,
 "colour": null,
 "gender": null,
 "minPrice": null,
@@ -385,7 +379,7 @@ Output:
 {
 "productName": "Air Force 1s",
 "brand": null,
-"category": null,
+"subCategory": null,
 "colour": "black",
 "gender": null,
 "minPrice": null,
@@ -411,7 +405,7 @@ Output:
 {
 "productName": null,
 "brand": "Nike",
-"category": "Running",
+"subCategory": "Running",
 "colour": null,
 "gender": "male",
 "minPrice": null,
@@ -437,7 +431,7 @@ Output:
 {
 "productName": null,
 "brand": null,
-"category": null,
+"subCategory": null,
 "colour": null,
 "gender": null,
 "minPrice": null,
@@ -463,7 +457,7 @@ Output:
 {
 "productName": "Jordan 4s",
 "brand": null,
-"category": null,
+"subCategory": null,
 "colour": null,
 "gender": null,
 "minPrice": null,
@@ -489,7 +483,7 @@ Output:
 {
 "productName": null,
 "brand": null,
-"category": "Sneakers",
+"subCategory": "Sneakers",
 "colour": "white",
 "gender": null,
 "minPrice": null,

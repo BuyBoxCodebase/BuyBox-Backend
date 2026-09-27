@@ -102,15 +102,14 @@ export class SearchService {
       });
     }
 
-    if (intent.category) {
-      const termClean = clean(intent.category);
+    if (intent.subCategory) {
+      const termClean = clean(intent.subCategory);
       whereClause.AND.push({
         OR: [
-          { category: { name: { contains: intent.category, mode: 'insensitive' } } },
-          { subCategory: { name: { contains: intent.category, mode: 'insensitive' } } },
-          { name: { contains: intent.category, mode: 'insensitive' } },
-          { description: { contains: intent.category, mode: 'insensitive' } },
-          { searchTags: { hasSome: [`category:${termClean}`, `subcategory:${termClean}`, termClean] } }
+          { subCategory: { name: { contains: intent.subCategory, mode: 'insensitive' } } },
+          { name: { contains: intent.subCategory, mode: 'insensitive' } },
+          { description: { contains: intent.subCategory, mode: 'insensitive' } },
+          { searchTags: { hasSome: [`subcategory:${termClean}`, termClean] } }
         ]
       });
     }

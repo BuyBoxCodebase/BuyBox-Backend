@@ -6,10 +6,10 @@ export const IntentSchema = z.object({
     .nullable()
     .describe('Specific product name explicitly mentioned by the user (e.g. "puma 350", "iphone 14"). NOTE: generic terms like "shoes", "sneaker", or "gym" are NOT product names. If only generic terms are used, return null for productName.'),
 
-  category: z
-    .enum(['Sneakers', 'Training', 'Lifestyle', 'Basketball', 'Running'])
+  subCategory: z
+    .string()
     .nullable()
-    .describe('Product category explicitly mentioned. If no match, return null.'),
+    .describe('Product subcategory explicitly mentioned or clearly supported by the request, matching the catalogue subcategory name when possible; otherwise null.'),
 
   brand: z
     .string()
