@@ -21,6 +21,7 @@ import { ChatModule } from './chat/chat.module';
 import { ReelsModule } from './reels/reels.module';
 import { EventsModule } from './events/events.module';
 import { RecommendationsModule } from './recommendations/recommendations.module';
+import { LinoModule } from './lino/lino.module';
 
 import { CacheModule } from '@nestjs/cache-manager';
 import { createKeyv } from '@keyv/redis';
@@ -64,6 +65,7 @@ import { createKeyv } from '@keyv/redis';
     ReelsModule,
     EventsModule,
     RecommendationsModule,
+    LinoModule,
   ],
   controllers: [],
   providers: [],
