@@ -209,11 +209,7 @@ export class OrderService {
               include: {
                 product: {
                   include: {
-                    brand: {
-                      include: {
-                        user: true,
-                      },
-                    },
+                    seller: true,
                   },
                 },
                 variant: true,
@@ -238,7 +234,7 @@ export class OrderService {
       for (const item of order.products) {
         if (!item.product) continue;
         
-        const seller = item.product.brand?.user;
+        const seller = item.product.seller;
         const productDetails = {
           name: item.product.name,
           quantity: item.quantity,
@@ -426,9 +422,7 @@ export class OrderService {
         products: {
           some: {
             product: {
-              brand: {
-                userId: userId
-              }
+              sellerId: userId
             }
           }
         }
@@ -437,9 +431,7 @@ export class OrderService {
         products: {
           where: {
             product: {
-              brand: {
-                userId: userId
-              }
+              sellerId: userId
             }
           },
           select: {
@@ -555,9 +547,7 @@ export class OrderService {
           products: {
             some: {
               product: {
-                brand: {
-                  userId: userId
-                }
+                sellerId: userId
               }
             }
           }

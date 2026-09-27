@@ -37,15 +37,8 @@ export class AdminControlService {
           phoneNumber: true,
           isCompleted: true,
           createdAt: true,
-          brand: {
-            select: {
-              id: true,
-              name: true,
-              description: true,
-              brandPic: true,
-              createdAt: true,
-            },
-          },
+          brandPic: true,
+          description: true,
         },
         orderBy: {
           createdAt: 'desc',
@@ -143,15 +136,10 @@ export class AdminControlService {
             select: {
               product: {
                 select: {
-                  brand: {
+                  seller: {
                     select: {
                       name: true,
-                      user: {
-                        select: {
-                          name: true,
-                          phoneNumber: true,
-                        },
-                      },
+                      phoneNumber: true,
                     },
                   },
                 },

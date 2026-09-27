@@ -6,12 +6,12 @@ export class SellerAnalyticsService {
     constructor(private prisma: PrismaService) { }
 
     async getTotalRevenue(sellerId: string, month: number, year: number) {
-        const brand = await this.prisma.brand.findUnique({
-            where: { userId: sellerId },
+        const seller = await this.prisma.seller.findUnique({
+            where: { id: sellerId },
             select: { id: true },
         });
 
-        if (!brand) {
+        if (!seller) {
             return {
                 amount: 0,
                 change: '0%',
@@ -27,7 +27,7 @@ export class SellerAnalyticsService {
         const currentMonthOrders = await this.prisma.orderProduct.findMany({
             where: {
                 product: {
-                    brandId: brand.id,
+                    sellerId: seller.id,
                 },
                 order: {
                     createdAt: {
@@ -52,7 +52,7 @@ export class SellerAnalyticsService {
         const prevMonthOrders = await this.prisma.orderProduct.findMany({
             where: {
                 product: {
-                    brandId: brand.id,
+                    sellerId: seller.id,
                 },
                 order: {
                     createdAt: {
@@ -85,12 +85,12 @@ export class SellerAnalyticsService {
     }
 
     async getTotalSubscriptions(sellerId: string, month: number, year: number) {
-        const brand = await this.prisma.brand.findUnique({
-            where: { userId: sellerId },
+        const seller = await this.prisma.seller.findUnique({
+            where: { id: sellerId },
             select: { id: true },
         });
 
-        if (!brand) {
+        if (!seller) {
             return {
                 count: 0,
                 change: '0%',
@@ -112,7 +112,7 @@ export class SellerAnalyticsService {
                 products: {
                     some: {
                         product: {
-                            brandId: brand.id,
+                            sellerId: seller.id,
                         },
                     },
                 },
@@ -132,7 +132,7 @@ export class SellerAnalyticsService {
                 products: {
                     some: {
                         product: {
-                            brandId: brand.id,
+                            sellerId: seller.id,
                         },
                     },
                 },
@@ -157,12 +157,12 @@ export class SellerAnalyticsService {
     }
 
     async getTotalSales(sellerId: string, month: number, year: number) {
-        const brand = await this.prisma.brand.findUnique({
-            where: { userId: sellerId },
+        const seller = await this.prisma.seller.findUnique({
+            where: { id: sellerId },
             select: { id: true },
         });
 
-        if (!brand) {
+        if (!seller) {
             return {
                 count: 0,
                 change: '0%',
@@ -184,7 +184,7 @@ export class SellerAnalyticsService {
                 products: {
                     some: {
                         product: {
-                            brandId: brand.id,
+                            sellerId: seller.id,
                         },
                     },
                 },
@@ -203,7 +203,7 @@ export class SellerAnalyticsService {
                 products: {
                     some: {
                         product: {
-                            brandId: brand.id,
+                            sellerId: seller.id,
                         },
                     },
                 },
@@ -227,12 +227,12 @@ export class SellerAnalyticsService {
     }
 
     async getRecentSales(sellerId: string, month: number, year: number) {
-        const brand = await this.prisma.brand.findUnique({
-            where: { userId: sellerId },
+        const seller = await this.prisma.seller.findUnique({
+            where: { id: sellerId },
             select: { id: true },
         });
 
-        if (!brand) {
+        if (!seller) {
             return {
                 totalSales: 0,
                 customers: [],
@@ -251,7 +251,7 @@ export class SellerAnalyticsService {
                 products: {
                     some: {
                         product: {
-                            brandId: brand.id,
+                            sellerId: seller.id,
                         },
                     },
                 },
@@ -267,7 +267,7 @@ export class SellerAnalyticsService {
                 products: {
                     where: {
                         product: {
-                            brandId: brand.id,
+                            sellerId: seller.id,
                         },
                     },
                     select: {
@@ -317,12 +317,12 @@ export class SellerAnalyticsService {
     }
 
     async getMonthlyData(sellerId: string, year: number) {
-        const brand = await this.prisma.brand.findUnique({
-            where: { userId: sellerId },
+        const seller = await this.prisma.seller.findUnique({
+            where: { id: sellerId },
             select: { id: true },
         });
 
-        if (!brand) {
+        if (!seller) {
             return [];
         }
 
@@ -336,7 +336,7 @@ export class SellerAnalyticsService {
             const orders = await this.prisma.orderProduct.findMany({
                 where: {
                     product: {
-                        brandId: brand.id,
+                        sellerId: seller.id,
                     },
                     order: {
                         createdAt: {

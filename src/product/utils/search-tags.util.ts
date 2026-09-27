@@ -1,5 +1,4 @@
 export function generateSearchTags(data: {
-  brandName?: string;
   categoryName?: string;
   subCategoryName?: string;
   options?: { name: string; values: ({ value: string } | string)[] }[];
@@ -8,10 +7,6 @@ export function generateSearchTags(data: {
   const tags = new Set<string>();
 
   const clean = (str: string) => str.toLowerCase().trim();
-
-  if (data.brandName) {
-    tags.add(`brand:${clean(data.brandName)}`);
-  }
 
   if (data.categoryName) {
     tags.add(`category:${clean(data.categoryName)}`);

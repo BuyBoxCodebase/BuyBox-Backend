@@ -13,14 +13,12 @@ export class InventoryService {
         variantId: string;
         quantity: number;
     }) {
-        // Check if the variant exists and belongs to user's brand
+        // Check if the variant exists and belongs to the seller
         const variant = await this.prisma.productVariant.findFirst({
             where: {
                 id: variantId,
                 product: {
-                    brand: {
-                        userId: userId,
-                    },
+                    sellerId: userId,
                 },
             },
             include: {
@@ -180,11 +178,11 @@ export class InventoryService {
         };
     }
 
-    // Get all inventory for a brand/seller
+    // Get all inventory for a seller
     async getSellerInventory({ userId }: { userId: string }) {
-        const brand = await this.prisma.brand.findUnique({
+        const seller = await this.prisma.seller.findUnique({
             where: {
-                userId: userId
+                id: userId
             },
             include: {
                 products: {
@@ -208,12 +206,12 @@ export class InventoryService {
             }
         });
 
-        if (!brand) {
-            throw new BadRequestException("Brand not found for this user");
+        if (!seller) {
+            throw new BadRequestException("Seller not found");
         }
 
         // Transform the data to a more usable format
-        const inventorySummary = brand.products.flatMap(product => {
+        const inventorySummary = seller.products.flatMap(product => {
             return product.variants.map(variant => {
                 // Format variant options for display
                 const variantOptions = variant.options.map(opt =>
@@ -235,7 +233,7 @@ export class InventoryService {
 
         return {
             success: true,
-            brandName: brand.name,
+            sellerName: seller.name,
             inventory: inventorySummary
         };
     }
@@ -255,9 +253,7 @@ export class InventoryService {
             where: {
                 id: { in: variantIds },
                 product: {
-                    brand: {
-                        userId: userId
-                    }
+                    sellerId: userId,
                 }
             },
             include: {

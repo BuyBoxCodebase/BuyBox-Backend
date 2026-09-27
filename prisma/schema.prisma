@@ -60,7 +60,11 @@ model Seller {
   googleId          String?
   facebookId        String?
   isCompleted       Boolean                 @default(false)
-  brand             Brand?
+  description       String?
+  brandPic          String?
+  location          String?
+  products          Product[]
+  advertisements    Advertisement[]
   notificationPrefs NotificationPreference?
   conversations     Conversation[]
 
@@ -87,20 +91,6 @@ model DeliveryAgent {
   updatedAt DateTime @updatedAt
 }
 
-model Brand {
-  id             String          @id @default(auto()) @map("_id") @db.ObjectId
-  userId         String          @unique @db.ObjectId
-  user           Seller          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name           String
-  description    String
-  brandPic       String?
-  location       String
-  products       Product[]
-  advertisements Advertisement[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
 
 model Cart {
   id       String     @id @default(auto()) @map("_id") @db.ObjectId
@@ -150,8 +140,8 @@ model SubCategory {
 
 model Product {
   id             String           @id @default(auto()) @map("_id") @db.ObjectId
-  brandId        String           @db.ObjectId
-  brand          Brand            @relation(fields: [brandId], references: [id], onDelete: Cascade)
+  sellerId       String           @db.ObjectId
+  seller         Seller           @relation(fields: [sellerId], references: [id], onDelete: Cascade)
   name           String
   description    String
   images         String[]
@@ -471,8 +461,8 @@ model Advertisement {
   product    Product?  @relation(fields: [productId], references: [id])
   categoryId String?   @db.ObjectId
   category   Category? @relation(fields: [categoryId], references: [id])
-  brandId    String?   @db.ObjectId
-  brand      Brand?    @relation(fields: [brandId], references: [id])
+  sellerId   String?   @db.ObjectId
+  seller     Seller?   @relation(fields: [sellerId], references: [id])
 
   mediaUrls         String[]
   scheduleConfig    Json?

@@ -123,7 +123,7 @@ export class AdsService {
             if (query.targetType) where.targetType = query.targetType;
             if (query.productId) where.productId = query.productId;
             if (query.categoryId) where.categoryId = query.categoryId;
-            if (query.brandId) where.brandId = query.brandId;
+            if (query.sellerId) where.sellerId = query.sellerId;
             if (query.isAbTest !== undefined) where.isAbTest = query.isAbTest;
 
             // Enhanced date filtering
@@ -167,7 +167,7 @@ export class AdsService {
                     category: {
                         select: { id: true, name: true }
                     },
-                    brand: {
+                    seller: {
                         select: { id: true, name: true, brandPic: true }
                     },
                     metrics: {
@@ -356,7 +356,7 @@ export class AdsService {
                         select: { id: true, name: true, images: true, basePrice: true }
                     },
                     category: true,
-                    brand: true,
+                    seller: true,
                 },
                 orderBy: {
                     priority: 'desc',
@@ -454,7 +454,7 @@ export class AdsService {
             include: {
                 product: true,
                 category: true,
-                brand: true,
+                seller: true,
                 metrics: {
                     orderBy: {
                         date: 'desc',
@@ -698,8 +698,8 @@ export class AdsService {
                 contextScore += 5;
             }
 
-            // Brand relevance
-            if (context.currentBrandId && ad.brandId === context.currentBrandId) {
+            // Seller relevance
+            if (context.currentSellerId && ad.sellerId === context.currentSellerId) {
                 contextScore += 5;
             }
 

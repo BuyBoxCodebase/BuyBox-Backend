@@ -7,6 +7,6 @@ import { SellerProfileModule } from './profile/profile.module';
     SellerAuthModule,
     SellerProfileModule,
   ],
-  exports: [SellerAuthModule],
+  exports: [SellerAuthModule, SellerProfileModule],
 })
 export class SellerModule { }

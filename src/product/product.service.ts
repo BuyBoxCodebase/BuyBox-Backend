@@ -33,16 +33,15 @@ export class ProductService {
       labels = [],
     } = data;
 
-    const brand = await this.prisma.brand.findUnique({
-      where: {
-        userId: userId
-      }
+    const seller = await this.prisma.seller.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true },
     });
 
-    if (!brand) {
+    if (!seller) {
       return {
         success: false,
-        message: "Brand not found for this user",
+        message: "Seller not found for this user",
       };
     }
 
@@ -89,7 +88,6 @@ export class ProductService {
     // Create a transaction to ensure product and default variant are created together
     try {
       const searchTags = generateSearchTags({
-        brandName: brand.name,
         categoryName: fetchedCategory?.name,
         subCategoryName: fetchedSubCategory?.name,
         options: options,
@@ -100,7 +98,7 @@ export class ProductService {
         // Create the base product
         const newProduct = await tx.product.create({
           data: {
-            brand: { connect: { id: brand.id } },
+            seller: { connect: { id: userId } },
             name,
             description,
             labels,
@@ -241,13 +239,11 @@ export class ProductService {
   async createVariant(userId: string, productId: string, data: CreateVariantDto) {
     const { name, description, price, stockQuantity, isDefault = false, images = [], optionValueIds = [] } = data;
 
-    // Check if the product exists and belongs to the user's brand
+    // Check if the product exists and belongs to the seller
     const product = await this.prisma.product.findFirst({
       where: {
         id: productId,
-        brand: {
-          userId
-        }
+        sellerId: userId,
       }
     });
 
@@ -348,14 +344,12 @@ export class ProductService {
   async updateVariant(userId: string, variantId: string, data: UpdateVariantDto) {
     const { name, description, price, isDefault, images, optionValueIds, stockQuantity } = data;
 
-    // Check if the variant exists and belongs to the user's brand
+    // Check if the variant exists and belongs to the seller
     const variant = await this.prisma.productVariant.findFirst({
       where: {
         id: variantId,
         product: {
-          brand: {
-            userId
-          }
+          sellerId: userId,
         }
       },
       include: {
@@ -467,14 +461,12 @@ export class ProductService {
   }
 
   async deleteVariant(userId: string, variantId: string) {
-    // Check if the variant exists and belongs to the user's brand
+    // Check if the variant exists and belongs to the seller
     const variant = await this.prisma.productVariant.findFirst({
       where: {
         id: variantId,
         product: {
-          brand: {
-            userId
-          }
+          sellerId: userId,
         }
       },
       include: {
@@ -746,9 +738,7 @@ export class ProductService {
   async getSellerProducts(userId: string) {
     const products = await this.prisma.product.findMany({
       where: {
-        brand: {
-          userId: userId
-        }
+        sellerId: userId,
       },
       include: {
         category: true,
@@ -966,7 +956,7 @@ export class ProductService {
     // Create a clean product object with the selected variant
     const product = {
       id: variant.product.id,
-      brandId: variant.product.brandId,
+      sellerId: variant.product.sellerId,
       name: variant.product.name,
       description: variant.product.description,
       images: variant.product.images,
@@ -1101,12 +1091,10 @@ export class ProductService {
     const product = await this.prisma.product.findUnique({
       where: {
         id: productId,
-        brand: {
-          userId: userId
-        }
+        sellerId: userId,
       },
       include: {
-        brand: true,
+        seller: { select: { name: true } },
         category: true,
         subCategory: true,
         options: {
@@ -1153,7 +1141,6 @@ export class ProductService {
     }
 
     const searchTags = generateSearchTags({
-      brandName: product.brand.name,
       categoryName: fetchedCategory?.name,
       subCategoryName: fetchedSubCategory?.name,
       options: product.options,
@@ -1201,9 +1188,7 @@ export class ProductService {
   async deleteAllProduct(userId: string) {
     const deletedProduct = await this.prisma.product.deleteMany({
       where: {
-        brand: {
-          userId: userId
-        }
+        sellerId: userId,
       }
     });
 
@@ -1218,9 +1203,7 @@ export class ProductService {
     const existsProduct = await this.prisma.product.findUnique({
       where: {
         id: productId,
-        brand: {
-          userId: userId
-        }
+        sellerId: userId,
       }
     });
 

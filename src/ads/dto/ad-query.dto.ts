@@ -9,6 +9,6 @@ export class AdQueryDto {
     activeTo?: Date;
     productId?: string;
     categoryId?: string;
-    brandId?: string;
+    sellerId?: string;
     isAbTest?: boolean;
 }

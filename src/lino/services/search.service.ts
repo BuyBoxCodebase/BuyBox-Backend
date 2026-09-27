@@ -44,21 +44,18 @@ export class SearchService {
         where: whereClause,
         take: 10,
         include: {
-          brand: true,
           variants: {
             include: {
               inventory: true
             }
           }
         },
-        // We'll skip complex custom sorting here and let the AI process the top 10 returned
       });
 
       return products.map(p => ({
         id: p.id,
         name: p.name,
         price: p.basePrice,
-        brand: p.brand.name,
         availableVariants: p.variants.length,
         image: p.images && p.images.length > 0 ? p.images[0] : null
       }));
@@ -86,18 +83,6 @@ export class SearchService {
           { labels: { has: termClean } },
           { description: { contains: searchTerm, mode: 'insensitive' } },
           { searchTags: { hasSome: [termClean] } }
-        ]
-      });
-    }
-
-    if (intent.brand) {
-      const termClean = clean(intent.brand);
-      whereClause.AND.push({
-        OR: [
-          { brand: { name: { contains: intent.brand, mode: 'insensitive' } } },
-          { name: { contains: intent.brand, mode: 'insensitive' } },
-          { description: { contains: intent.brand, mode: 'insensitive' } },
-          { searchTags: { hasSome: [`brand:${termClean}`, termClean] } }
         ]
       });
     }
@@ -154,21 +139,18 @@ export class SearchService {
         where: whereClause,
         take: 10,
         include: {
-          brand: true,
           variants: {
             include: {
               inventory: true
             }
           }
         },
-        // We'll skip complex custom sorting here and let the AI process the top 10 returned
       });
 
       return products.map(p => ({
         id: p.id,
         name: p.name,
         price: p.basePrice,
-        brand: p.brand.name,
         availableVariants: p.variants.length,
         image: p.images && p.images.length > 0 ? p.images[0] : null
       }));

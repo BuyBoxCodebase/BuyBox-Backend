@@ -17,7 +17,7 @@ export class CreateAdvertisementDto {
     budget?: number;
     productId?: string;
     categoryId?: string;
-    brandId?: string;
+    sellerId?: string;
     mediaUrls: string[];
     scheduleConfig?: Record<string, any>;
     displayConditions?: Record<string, any>;

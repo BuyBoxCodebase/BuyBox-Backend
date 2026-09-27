@@ -3,7 +3,7 @@ import { CustomerModule } from './customer/customer.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { ConfigModule } from '@nestjs/config';
 import { ProductModule } from './product/product.module';
-import { BrandModule } from './brand/brand.module';
+
 import { CartModule } from './cart/cart.module';
 import { OrderModule } from './order/order.module';
 import { InventoryModule } from './inventory/inventory.module';
@@ -50,7 +50,6 @@ import { LinoModule } from './lino/lino.module';
     SellerModule,
     DeliveryModule,
     CustomerModule,
-    BrandModule,
     ProductModule,
     CategoryModule,
     CartModule,
