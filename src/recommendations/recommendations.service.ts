@@ -31,7 +31,7 @@ export class RecommendationsService {
       select: {
         id: true,
         subCategoryId: true,
-        brandId: true,
+        sellerId: true,
         basePrice: true,
         createdAt: true,
         inventory: { select: { quantity: true } },
@@ -81,7 +81,7 @@ export class RecommendationsService {
     const brandPurchases = await this.db.orderProduct.count({
       where: {
         order: { is: { userId } },
-        product: { is: { brandId: product.brandId } },
+        product: { is: { sellerId: product.sellerId } },
       },
     });
     const brandScore = Math.min(
@@ -160,10 +160,10 @@ export class RecommendationsService {
 
     const products = await this.db.product.findMany({
       where: { id: { in: uniqueIds } },
-      select: { id: true, brandId: true },
+      select: { id: true, sellerId: true },
     });
-    const brandByProductId = new Map(
-      products.map((product) => [product.id, product.brandId]),
+    const brandByProductId = new Map<string, string>(
+      products.map((product) => [product.id, product.sellerId]),
     );
     const brandCount: Record<string, number> = {};
     const final: ProductScoreDto[] = [];

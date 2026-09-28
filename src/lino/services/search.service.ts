@@ -8,63 +8,6 @@ export class SearchService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async searchProducts(intent: Intent) {
-    this.logger.log(`Searching database for intent: ${JSON.stringify(intent)}`);
-    
-    // Construct Prisma query based on extracted intent
-    const whereClause: any = {};
-
-    // Basic text search on name or labels
-    if (intent.productName) {
-      const searchTerm = intent.productName;
-      whereClause.OR = [
-        { name: { contains: searchTerm, mode: 'insensitive' } },
-        { labels: { has: searchTerm.toLowerCase() } },
-        { description: { contains: searchTerm, mode: 'insensitive' } }
-      ];
-    }
-
-    if (intent.minPrice != null || intent.maxPrice != null) {
-      whereClause.basePrice = {};
-      if (intent.minPrice != null) whereClause.basePrice.gte = intent.minPrice;
-      if (intent.maxPrice != null) whereClause.basePrice.lte = intent.maxPrice;
-    }
-
-    // We can also join variants if we need to filter by size or color
-    if (intent.size || intent.colour) {
-      whereClause.variants = {
-        some: {}
-      };
-      // Note: A more complex query on ProductOptionValue might be needed depending on how exact data is stored
-      // For now, we search within Variant properties if they exist
-    }
-    console.log(JSON.stringify(whereClause,null,2));
-    try {
-      const products = await this.prisma.product.findMany({
-        where: whereClause,
-        take: 10,
-        include: {
-          variants: {
-            include: {
-              inventory: true
-            }
-          }
-        },
-      });
-
-      return products.map(p => ({
-        id: p.id,
-        name: p.name,
-        price: p.basePrice,
-        availableVariants: p.variants.length,
-        image: p.images && p.images.length > 0 ? p.images[0] : null
-      }));
-    } catch (error) {
-      this.logger.error('Error executing product search query', error);
-      throw error;
-    }
-  }
-
   async searchProductsV2(intent: Intent) {
     this.logger.log(`Searching database for intent: ${JSON.stringify(intent)}`);
     
@@ -74,7 +17,7 @@ export class SearchService {
     const clean = (str: string) => str.toLowerCase().trim();
 
     // Text search fallback to name, description, or searchTags matching general term
-    if (intent.productName) {
+    if (intent.productName && !intent.productName.toLowerCase().includes("shoe")) {
       const searchTerm = intent.productName;
       const termClean = clean(searchTerm);
       whereClause.AND.push({
@@ -91,8 +34,6 @@ export class SearchService {
       const termClean = clean(intent.category);
       whereClause.AND.push({
         OR: [
-          { category: { name: { contains: intent.category, mode: 'insensitive' } } },
-          { subCategory: { name: { contains: intent.category, mode: 'insensitive' } } },
           { name: { contains: intent.category, mode: 'insensitive' } },
           { description: { contains: intent.category, mode: 'insensitive' } },
           { searchTags: { hasSome: [`category:${termClean}`, `subcategory:${termClean}`, termClean] } }
