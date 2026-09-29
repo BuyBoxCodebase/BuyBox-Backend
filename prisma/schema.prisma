@@ -682,10 +682,14 @@ model UserEvent {
 model LinoConversation {
   id         String        @id @default(auto()) @map("_id") @db.ObjectId
   sessionId  String        @unique
+  userId     String?       // null for guest chats; populated when user is authenticated
+  title      String?       // auto-set from the first user message (first 60 chars)
   messages   LinoMessage[]
-  
+
   createdAt  DateTime      @default(now())
   updatedAt  DateTime      @updatedAt
+
+  @@index([userId])
 }
 
 model LinoMessage {

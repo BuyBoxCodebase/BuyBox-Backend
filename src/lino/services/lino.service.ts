@@ -90,13 +90,17 @@ export class LinoService implements OnModuleInit {
     this.ai = await eval(`import('ai')`);
   }
 
-  async handleChat(sessionId: string, message: string) {
+  async handleChat(sessionId: string, message: string, userId?: string) {
     let conversation = await this.prisma.linoConversation.findUnique({
       where: { sessionId }
     });
     if (!conversation) {
       conversation = await this.prisma.linoConversation.create({
-        data: { sessionId }
+        data: {
+          sessionId,
+          userId: userId ?? null,
+          title: message.slice(0, 60),
+        }
       });
     }
 
@@ -204,7 +208,7 @@ export class LinoService implements OnModuleInit {
     }
   }
 
-  async handleChatStream(sessionId: string, message: string, res: any) {
+  async handleChatStream(sessionId: string, message: string, res: any, userId?: string) {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
@@ -217,7 +221,11 @@ export class LinoService implements OnModuleInit {
     });
     if (!conversation) {
       conversation = await this.prisma.linoConversation.create({
-        data: { sessionId }
+        data: {
+          sessionId,
+          userId: userId ?? null,
+          title: message.slice(0, 60),
+        }
       });
     }
 
@@ -360,6 +368,25 @@ export class LinoService implements OnModuleInit {
           orderBy: { createdAt: 'asc' }
         }
       }
+    });
+  }
+
+  async getUserConversations(userId: string) {
+    return this.prisma.linoConversation.findMany({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+      select: {
+        sessionId: true,
+        title: true,
+        createdAt: true,
+        updatedAt: true,
+        messages: {
+          where: { role: 'user' },
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: { content: true, role: true },
+        },
+      },
     });
   }
 }
