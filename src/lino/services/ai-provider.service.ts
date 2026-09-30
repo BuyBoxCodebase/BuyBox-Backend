@@ -42,7 +42,7 @@ export class AiProviderService implements OnModuleInit {
       
       const { createOpenAI } = await eval(`import('@ai-sdk/openai')`);
       const openai = createOpenAI({ apiKey });
-      this.model = openai('gpt-6-luna');
+      this.model = openai('gpt-4o');
       this.logger.log('Initialized OpenAI Provider');
     }
   }
