@@ -696,8 +696,9 @@ model LinoMessage {
   id                 String           @id @default(auto()) @map("_id") @db.ObjectId
   linoConversationId String           @db.ObjectId
   conversation       LinoConversation @relation(fields: [linoConversationId], references: [id], onDelete: Cascade)
-  role               String           // 'user', 'assistant', 'system'
-  content            String
+  role               String           // 'user', 'assistant', 'tool'
+  content            String           // plain text, or '__STRUCTURED__' if contentJson is used
+  contentJson        Json?            // structured content for tool-call / tool-result messages
   metadata           Json?            // store products etc.
   
   createdAt          DateTime         @default(now())

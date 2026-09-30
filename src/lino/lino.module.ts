@@ -4,7 +4,6 @@ import { CacheModule } from '@nestjs/cache-manager';
 import { LinoController } from './lino.controller';
 import { LinoService } from './services/lino.service';
 import { AiProviderService } from './services/ai-provider.service';
-import { IntentService } from './services/intent.service';
 import { SearchService } from './services/search.service';
 import { ToolsService } from './services/tools.service';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -18,7 +17,6 @@ import { PrismaModule } from '../prisma/prisma.module';
   providers: [
     LinoService,
     AiProviderService,
-    IntentService,
     SearchService,
     ToolsService,
   ],

@@ -1,6 +1,4 @@
-import { Injectable, Inject, Logger, OnModuleInit } from '@nestjs/common';
-import { CACHE_MANAGER } from '@nestjs/cache-manager';
-import { Cache } from 'cache-manager';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { AiProviderService } from './ai-provider.service';
 import { ToolsService } from './tools.service';
 import type { ModelMessage } from 'ai';
@@ -72,6 +70,83 @@ Never include image links, image URLs, or markdown images in your response.
 Do not output a dry, repetitive list of product names, prices, or variants. The UI already displays the product cards. Summarize why the products are a good match, highlight a key trend or feature from the selection, and ask a friendly follow-up question.
 
 If the user asks for a product, always execute the search_products tool first.
+
+---
+
+SEARCH_PRODUCTS TOOL — HOW TO FILL PARAMETERS:
+
+When calling search_products, you are responsible for extracting and structuring the intent from the full conversation history — not just the latest message. Read the entire conversation before deciding what to pass.
+
+FIELD EXTRACTION RULES:
+
+- productName: Use ONLY for specific named products (e.g. "Air Force 1", "Puma Suede", "Jordan 4"). Do NOT put generic words like "shoes", "sneakers", "shirt" here — use category for those. Omit if not applicable.
+- category: Map to one of: "Sneakers", "Training", "Lifestyle", "Basketball", "Running". Use when the user mentions a type of footwear or sport. Omit if not applicable.
+- brand: Extract only if the user explicitly names a brand (e.g. "Nike", "Adidas", "New Balance"). Never infer a brand from a product type.
+- colour: Extract if the user mentions a colour (e.g. "red", "black", "white"). Always carry this forward on follow-up queries unless the user explicitly changes it.
+- size: Extract only if the user states a size (e.g. "size 9", "XL", "42"). Omit if not mentioned.
+- minPrice: Set when user says "above", "over", or "more than" a price value.
+- maxPrice: Set when user says "under", "below", "up to", or "less than" a price value.
+- occasion: Set when user mentions a context like "party", "wedding", "gym", "work", "casual".
+- gender: Set only if explicitly stated (e.g. "men's", "women's", "kids"). Never infer from product type.
+- sortPreference: Set if user says "cheapest", "newest", "most popular", etc.
+
+CONTEXT CARRY-FORWARD (CRITICAL):
+On every follow-up search, merge new constraints with what was already established in prior turns. Do not reset fields the user did not change.
+
+Examples:
+  Turn 1: "show me red Nike sneakers"
+  → call: { colour: "red", brand: "Nike", category: "Sneakers" }
+
+  Turn 2: "now show me something under $80"
+  → call: { colour: "red", brand: "Nike", category: "Sneakers", maxPrice: 80 }
+
+  Turn 1: "find me black running shoes"
+  → call: { colour: "black", category: "Running" }
+
+  Turn 2: "show me the same but in white"
+  → call: { colour: "white", category: "Running" }
+
+  Turn 1: "any Adidas for the gym?"
+  → call: { brand: "Adidas", category: "Training" }
+
+  Turn 2: "what about size 10?"
+  → call: { brand: "Adidas", category: "Training", size: "10" }
+
+OMISSION RULES:
+- Omit any field not explicitly mentioned. Do not pass null, empty string, or 0 — simply leave the field out.
+- Do not guess. "cheap shoes" does not mean maxPrice — omit price entirely.
+- Do not infer gender from category or brand.
+
+---
+
+SCOPE — WHAT LINO CAN AND CANNOT DO:
+
+Lino is a shopping assistant. You only help customers find, explore, and purchase products on Treides.
+
+You CANNOT and MUST NOT answer questions that are unrelated to shopping, products, or the Treides platform. This includes but is not limited to:
+- General knowledge (history, science, politics, geography, celebrities, etc.)
+- Current events or news
+- Math problems, coding help, or homework
+- Personal advice unrelated to shopping
+- Anything a search engine or general AI would answer
+
+When a customer asks an off-topic question, decline warmly but clearly, and redirect to shopping. Do not lecture or over-explain.
+
+Examples of how to handle off-topic questions:
+
+Customer: "Who is the Prime Minister of India?"
+Lino: "Ha, that's a bit out of my lane — I'm all about finding you great products. Anything I can help you shop for today?"
+
+Customer: "What's the capital of France?"
+Lino: "Not quite my area 😄 I'm your shopping guy. Looking for anything specific today?"
+
+Customer: "Can you write me a poem?"
+Lino: "Poetry's not really my thing — but finding clean fits? That I can do. What are you shopping for?"
+
+Customer: "Solve this math problem for me"
+Lino: "Math isn't my strong suit, but style is. Want me to find you something?"
+
+Keep the decline short, light, and on-brand. Never be rude or dismissive. Always offer to help with shopping immediately after.
 `;
 
 @Injectable()
@@ -80,7 +155,6 @@ export class LinoService implements OnModuleInit {
   private ai: any;
 
   constructor(
-    @Inject(CACHE_MANAGER) private cacheManager: Cache,
     private readonly aiProvider: AiProviderService,
     private readonly toolsService: ToolsService,
     private readonly prisma: PrismaService,
@@ -90,122 +164,121 @@ export class LinoService implements OnModuleInit {
     this.ai = await eval(`import('ai')`);
   }
 
-  async handleChat(sessionId: string, message: string, userId?: string) {
+  private async getOrCreateConversation(sessionId: string, initialMessage: string, userId?: string) {
     let conversation = await this.prisma.linoConversation.findUnique({
-      where: { sessionId }
+      where: { sessionId },
     });
     if (!conversation) {
       conversation = await this.prisma.linoConversation.create({
         data: {
           sessionId,
           userId: userId ?? null,
-          title: message.slice(0, 60),
-        }
+          title: initialMessage.slice(0, 60),
+        },
       });
     }
+    return conversation;
+  }
 
-    const previousMessages = await this.prisma.linoMessage.findMany({
-      where: { linoConversationId: conversation.id },
-      orderBy: { createdAt: 'asc' }
+  private async loadModelHistory(conversationId: string): Promise<ModelMessage[]> {
+    const rawMessages = await this.prisma.linoMessage.findMany({
+      where: { linoConversationId: conversationId },
+      orderBy: { createdAt: 'desc' },
+      take: 15,
     });
 
-    const history: ModelMessage[] = previousMessages.map(m => ({
-      role: m.role as any,
-      content: m.content
-    }));
-    
-    // Append new user message
+    rawMessages.reverse();
+
+    return rawMessages.map((m) => {
+      if (m.contentJson) {
+        const content = (m.contentJson as any[]).map((part: any) => {
+          const { providerOptions, ...rest } = part;
+          return rest;
+        });
+        return {
+          role: m.role as any,
+          content,
+        };
+      }
+      return {
+        role: m.role as any,
+        content: m.content,
+      };
+    });
+  }
+
+  private extractProductsFromMessages(responseMessages: any[]): any[] {
+    for (const msg of responseMessages) {
+      if (msg.role === 'tool' && Array.isArray(msg.content)) {
+        for (const part of msg.content) {
+          if (part.type === 'tool-result' && part.toolName === 'search_products') {
+            const products = 
+              (part.result as any)?.products ?? 
+              (part.output as any)?.value?.products ?? 
+              (part.output as any)?.products;
+              
+            if (Array.isArray(products) && products.length > 0) {
+              return products;
+            }
+          }
+        }
+      }
+    }
+    return [];
+  }
+
+  private async saveResponseMessages(conversationId: string, responseMessages: any[], products: any[]) {
+    for (let i = 0; i < responseMessages.length; i++) {
+      const msg = responseMessages[i];
+      const isLast = i === responseMessages.length - 1;
+      const isAssistantWithText = msg.role === 'assistant' && typeof msg.content === 'string';
+
+      await this.prisma.linoMessage.create({
+        data: {
+          linoConversationId: conversationId,
+          role: msg.role,
+          content: isAssistantWithText ? msg.content : '__STRUCTURED__',
+          contentJson: isAssistantWithText ? null : (msg.content as any),
+          metadata: isLast && products.length > 0 ? { products } : null,
+        },
+      });
+    }
+  }
+
+  async handleChat(sessionId: string, message: string, userId?: string) {
+    const conversation = await this.getOrCreateConversation(sessionId, message, userId);
+    const history = await this.loadModelHistory(conversation.id);
+
     history.push({ role: 'user', content: message });
     await this.prisma.linoMessage.create({
       data: {
         linoConversationId: conversation.id,
         role: 'user',
-        content: message
-      }
+        content: message,
+      },
     });
 
-    // 3. Setup AI Agent Call
     const model = this.aiProvider.getModel();
-    
+    const { generateText, isStepCount } = this.ai;
+
     this.logger.log(`Processing chat for session: ${sessionId}`);
 
-    try {
-      const { generateText, isStepCount } = this.ai;
-      const result = await generateText({
-        model,
-        system: LINO_SYSTEM_PROMPT,
-        messages: history,
-        tools: this.toolsService.getTools(message),
-        stopWhen: isStepCount(5),
-      });
+    const result = await generateText({
+      model,
+      system: LINO_SYSTEM_PROMPT,
+      messages: history,
+      tools: this.toolsService.getTools(),
+      stopWhen: isStepCount(5),
+    });
+    const responseMessages = result.responseMessages || [];
+    const products = this.extractProductsFromMessages(responseMessages);
 
+    await this.saveResponseMessages(conversation.id, responseMessages, products);
 
-      let finalReply = result.text;
-      let finalProducts: any[] = [];
-
-      // Try to extract products if the model natively used tool_calls across any step
-      if (result.steps && result.steps.length > 0) {
-        for (const step of result.steps) {
-          if (step.toolResults && step.toolResults.length > 0) {
-            const searchResult = step.toolResults.find((t: any) => t.toolName === 'search_products') as any;
-            if (searchResult && searchResult.output && searchResult.output.products) {
-              finalProducts = searchResult.output.products;
-            }
-          }
-        }
-      } else if (result.toolResults && result.toolResults.length > 0) {
-        const searchResult = result.toolResults.find((t: any) => t.toolName === 'search_products') as any;
-        if (searchResult && searchResult.output && searchResult.output.products) {
-          finalProducts = searchResult.output.products;
-        }
-      }
-
-      // 🛠️ Fallback for local models (like Qwen 3B) that output raw JSON text instead of proper API tool calls
-      if (finalReply.trim().startsWith('{') && finalReply.includes('search_products')) {
-        try {
-          const parsed = JSON.parse(finalReply.trim());
-          if (parsed.name === 'search_products') {
-            this.logger.log('Intercepted raw JSON tool call. Executing manual fallback...');
-            
-            // 1. Manually execute the tool
-            const toolFunc = this.toolsService.getTools(message).search_products.execute;
-            if (toolFunc) {
-              const searchResult = await toolFunc(parsed.arguments || {}, {} as any);
-              finalProducts = (searchResult as any).products || [];
-              
-              // 2. Perform a second LLM pass to summarize the results
-              const summaryResult = await generateText({
-                model,
-                system: 'You are Lino, a playful, warm, modern Gen Z-friendly shopping assistant. Use light slang naturally when it fits, but never force it or sound childish. Be conversational and engaging. Summarize why these products are a great match and ask a friendly follow-up question. NEVER output a dry list of product names, prices, or details (the UI already shows the cards). Never use negative words or apologize. Never include image URLs.',
-                prompt: `User query: "${message}"\nSearch Results: ${JSON.stringify(searchResult)}`,
-              });
-              
-              finalReply = summaryResult.text;
-            }
-          }
-        } catch (e) {
-          this.logger.warn('Failed to parse manual JSON tool call fallback', e);
-        }
-      }
-
-      // Save assistant response to DB
-      await this.prisma.linoMessage.create({
-        data: {
-          linoConversationId: conversation.id,
-          role: 'assistant',
-          content: finalReply,
-          metadata: finalProducts.length > 0 ? { products: finalProducts } : null
-        }
-      });
-      
-      return {
-        reply: finalReply,
-        products: finalProducts
-      };
-    } catch (error) {
-      this.logger.error('Error during AI generation', error);
-      throw error;
-    }
+    return {
+      reply: result.text,
+      products,
+    };
   }
 
   async handleChatStream(sessionId: string, message: string, res: any, userId?: string) {
@@ -213,134 +286,66 @@ export class LinoService implements OnModuleInit {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    // Send initial status
     res.write(`data: ${JSON.stringify({ type: 'status', message: 'Analyzing your request...' })}\n\n`);
 
-    let conversation = await this.prisma.linoConversation.findUnique({
-      where: { sessionId }
-    });
-    if (!conversation) {
-      conversation = await this.prisma.linoConversation.create({
-        data: {
-          sessionId,
-          userId: userId ?? null,
-          title: message.slice(0, 60),
-        }
-      });
-    }
-
-    const previousMessages = await this.prisma.linoMessage.findMany({
-      where: { linoConversationId: conversation.id },
-      orderBy: { createdAt: 'asc' }
-    });
-
-    let history: ModelMessage[] = previousMessages.map(m => ({
-      role: m.role as any,
-      content: m.content
-    }));
-    
-    history.push({ role: 'user', content: message });
-    await this.prisma.linoMessage.create({
-      data: {
-        linoConversationId: conversation.id,
-        role: 'user',
-        content: message
-      }
-    });
-
-    const model = this.aiProvider.getModel();
-    this.logger.log(`Processing chat STREAM for session: ${sessionId}`);
-
     try {
-      const { streamText } = this.ai;
+      const conversation = await this.getOrCreateConversation(sessionId, message, userId);
+      const history = await this.loadModelHistory(conversation.id);
+
+      history.push({ role: 'user', content: message });
+      await this.prisma.linoMessage.create({
+        data: {
+          linoConversationId: conversation.id,
+          role: 'user',
+          content: message,
+        },
+      });
+
+      const model = this.aiProvider.getModel();
+      const { streamText, isStepCount } = this.ai;
+
+      this.logger.log(`Processing chat stream for session: ${sessionId}`);
+
       const result = streamText({
         model,
         system: LINO_SYSTEM_PROMPT,
         messages: history,
-        tools: this.toolsService.getTools(message)
+        tools: this.toolsService.getTools(),
+        stopWhen: isStepCount(5),
       });
 
-      let finalReply = '';
-      let finalProducts: any[] = [];
-      let isJSON = false;
-      let firstChunk = true;
+      let streamedProducts: any[] = [];
 
       for await (const chunk of result.fullStream) {
         if (chunk.type === 'text-delta') {
-          if (firstChunk) {
-            firstChunk = false;
-            if (chunk.text.trim().startsWith('{')) {
-              isJSON = true;
-            }
-          }
-          finalReply += chunk.text;
-          if (!isJSON) {
-            res.write(`data: ${JSON.stringify({ type: 'text', chunk: chunk.text })}\n\n`);
-          }
+          res.write(`data: ${JSON.stringify({ type: 'text', chunk: chunk.text })}\n\n`);
         } else if (chunk.type === 'tool-call') {
-          let toolDesc = 'Working on it...';
-          if (chunk.toolName === 'search_products') toolDesc = 'Searching catalog for products...';
-          res.write(`data: ${JSON.stringify({ type: 'status', message: toolDesc })}\n\n`);
+          const statusText = chunk.toolName === 'search_products'
+            ? 'Searching catalog for products...'
+            : 'Working on it...';
+          res.write(`data: ${JSON.stringify({ type: 'status', message: statusText })}\n\n`);
         } else if (chunk.type === 'tool-result') {
           if (chunk.toolName === 'search_products') {
-            finalProducts = (chunk as any).output?.products || [];
-            res.write(`data: ${JSON.stringify({ type: 'products', products: finalProducts })}\n\n`);
+            const foundProducts = 
+              (chunk as any).result?.products || 
+              (chunk as any).output?.value?.products || 
+              (chunk as any).output?.products || [];
+              
+            if (Array.isArray(foundProducts) && foundProducts.length > 0) {
+              streamedProducts = foundProducts;
+              res.write(`data: ${JSON.stringify({ type: 'products', products: streamedProducts })}\n\n`);
+            }
             res.write(`data: ${JSON.stringify({ type: 'status', message: 'Summarizing results...' })}\n\n`);
           }
         }
       }
 
-      // 🛠️ Fallback for local models that output raw JSON text instead of proper API tool calls in the stream
-      if (isJSON && finalReply.includes('search_products')) {
-        try {
-          const parsed = JSON.parse(finalReply.trim());
-          if (parsed.name === 'search_products') {
-            this.logger.log('Intercepted raw JSON tool call in stream. Executing manual fallback...');
-            res.write(`data: ${JSON.stringify({ type: 'status', message: 'Searching catalog for products...' })}\n\n`);
-            
-            const toolFunc = this.toolsService.getTools(message).search_products.execute;
-            if (toolFunc) {
-              const searchResult = await toolFunc(parsed.arguments || {}, {} as any);
-              finalProducts = (searchResult as any).products || [];
-              res.write(`data: ${JSON.stringify({ type: 'products', products: finalProducts })}\n\n`);
-              res.write(`data: ${JSON.stringify({ type: 'status', message: 'Summarizing results...' })}\n\n`);
-              
-              // Clear finalReply because it was just JSON, allowing the summary fallback below to run
-              finalReply = '';
-            }
-          }
-        } catch (e) {
-          this.logger.warn('Failed to parse manual JSON tool call fallback in stream', e);
-        }
-      }
+      const responseMessages = (await result.responseMessages) || [];
+      const finalProducts = streamedProducts.length > 0
+        ? streamedProducts
+        : this.extractProductsFromMessages(responseMessages);
 
-      // 🛠️ Fallback: If the model natively executed the tool but failed to generate a summary text afterwards,
-      // run a quick secondary stream just to summarize the products.
-      if (finalReply.trim() === '' && finalProducts.length > 0) {
-        this.logger.log('Model did not provide a text summary. Running fallback summary stream...');
-        const summaryResult = streamText({
-          model,
-          system: 'You are Lino, a playful, warm, modern Gen Z-friendly shopping assistant. Use light slang naturally when it fits, but never force it or sound childish. Be conversational and engaging. Summarize why these products are a great match and ask a friendly follow-up question. NEVER output a dry list of product names, prices, or details (the UI already shows the cards). Never use negative words or apologize. Never include image URLs.',
-          prompt: `User query: "${message}"\nSearch Results: ${JSON.stringify(finalProducts.slice(0, 5))}`,
-        });
-        
-        for await (const chunk of summaryResult.fullStream) {
-          if (chunk.type === 'text-delta') {
-            finalReply += (chunk as any).text || (chunk as any).textDelta;
-            res.write(`data: ${JSON.stringify({ type: 'text', chunk: (chunk as any).text || (chunk as any).textDelta })}\n\n`);
-          }
-        }
-      }
-
-      // Save assistant message to DB
-      await this.prisma.linoMessage.create({
-        data: {
-          linoConversationId: conversation.id,
-          role: 'assistant',
-          content: finalReply,
-          metadata: finalProducts.length > 0 ? { products: finalProducts } : null
-        }
-      });
+      await this.saveResponseMessages(conversation.id, responseMessages, finalProducts);
 
       res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
       res.end();
@@ -354,9 +359,12 @@ export class LinoService implements OnModuleInit {
   async getAllConversations() {
     return this.prisma.linoConversation.findMany({
       include: {
-        messages: true
+        messages: {
+          where: { role: { in: ['user', 'assistant'] }, content: { not: '__STRUCTURED__' } },
+          orderBy: { createdAt: 'asc' },
+        },
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { createdAt: 'desc' },
     });
   }
 
@@ -365,9 +373,10 @@ export class LinoService implements OnModuleInit {
       where: { sessionId },
       include: {
         messages: {
-          orderBy: { createdAt: 'asc' }
-        }
-      }
+          where: { role: { in: ['user', 'assistant'] }, content: { not: '__STRUCTURED__' } },
+          orderBy: { createdAt: 'asc' },
+        },
+      },
     });
   }
 

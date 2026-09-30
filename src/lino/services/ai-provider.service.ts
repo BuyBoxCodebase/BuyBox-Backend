@@ -42,8 +42,7 @@ export class AiProviderService implements OnModuleInit {
       
       const { createOpenAI } = await eval(`import('@ai-sdk/openai')`);
       const openai = createOpenAI({ apiKey });
-      // Using gpt-4o-mini for fast, cheap agentic loops, or gpt-4o for complex tasks
-      this.model = openai('gpt-4o-mini');
+      this.model = openai('gpt-6-luna');
       this.logger.log('Initialized OpenAI Provider');
     }
   }

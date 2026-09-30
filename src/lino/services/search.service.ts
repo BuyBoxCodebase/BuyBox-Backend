@@ -8,8 +8,23 @@ export class SearchService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async searchProductsV2(intent: Intent) {
-    this.logger.log(`Searching database for intent: ${JSON.stringify(intent)}`);
+  async searchProductsV2(rawIntent: Intent) {
+    this.logger.log(`Searching database for intent: ${JSON.stringify(rawIntent)}`);
+    
+    // Sanitize the intent to handle models that pass "none", "null", or -1 instead of omitting fields
+    const intent: Partial<Intent> = {};
+    for (const [key, value] of Object.entries(rawIntent)) {
+      if (typeof value === 'string') {
+        const cleanVal = value.trim().toLowerCase();
+        if (cleanVal !== '' && cleanVal !== 'none' && cleanVal !== 'null') {
+          (intent as any)[key] = value.trim();
+        }
+      } else if (typeof value === 'number') {
+        if (value >= 0) {
+          (intent as any)[key] = value;
+        }
+      }
+    }
     
     // Construct Prisma query based on extracted intent
     const whereClause: any = { AND: [] };
@@ -75,6 +90,7 @@ export class SearchService {
     }
 
     console.log(JSON.stringify(whereClause, null, 2));
+    console.log("where")
     try {
       const products = await this.prisma.product.findMany({
         where: whereClause,
