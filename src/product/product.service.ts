@@ -1,12 +1,67 @@
+import { Prisma } from '@prisma/client';
 import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { CloudinaryService } from '../../src/cloudinary/cloudinary.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
-import { CreateProductDto } from './dto/create-product.dto';
+import { CreateProductDto, MIN_DESCRIPTION_LENGTH, PRODUCT_GENDERS, ProductAttributesDto, ProductGender } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
 import { revalidateFrontendCache, FrontendApp, CacheTag } from '../../libs/common/src';
 import { generateSearchTags } from './utils/search-tags.util';
+
+function assertValidDescription(description: string | undefined) {
+  if (!description || description.trim().length < MIN_DESCRIPTION_LENGTH) {
+    throw new BadRequestException(`Description must be at least ${MIN_DESCRIPTION_LENGTH} characters`);
+  }
+}
+
+function assertValidBrand(brand: string | undefined) {
+  if (!brand || !brand.trim()) {
+    throw new BadRequestException("Brand is required");
+  }
+}
+
+function assertValidModelName(modelName: string | undefined) {
+  if (!modelName || !modelName.trim()) {
+    throw new BadRequestException("Model name is required");
+  }
+}
+
+function assertValidGender(gender: string): asserts gender is ProductGender {
+  if (!PRODUCT_GENDERS.includes(gender as ProductGender)) {
+    throw new BadRequestException(`Gender must be one of: ${PRODUCT_GENDERS.join(', ')}`);
+  }
+}
+
+const ATTRIBUTE_FIELDS = ['model_generation', 'style_code', 'sizing_system'] as const;
+const ATTRIBUTE_GROUPS = {
+  use_case: ['primary_activity', 'terrain', 'arch_support', 'cushioning_level'],
+  materials: ['upper', 'sole', 'midsole_tech'],
+} as const;
+
+// Keeps only the known attribute keys with non-empty string values; returns null when nothing is left.
+function sanitizeAttributes(attributes: ProductAttributesDto | null | undefined): Prisma.JsonObject | null {
+  if (!attributes || typeof attributes !== 'object') return null;
+
+  const pick = (source: unknown, keys: readonly string[]) => {
+    const out: Record<string, string> = {};
+    if (!source || typeof source !== 'object') return out;
+    for (const key of keys) {
+      const value = (source as Record<string, unknown>)[key];
+      if (typeof value === 'string' && value.trim()) out[key] = value.trim();
+    }
+    return out;
+  };
+
+  const result: Prisma.JsonObject = pick(attributes, ATTRIBUTE_FIELDS);
+  for (const [group, keys] of Object.entries(ATTRIBUTE_GROUPS)) {
+    const picked = pick(attributes[group as keyof typeof ATTRIBUTE_GROUPS], keys);
+    if (Object.keys(picked).length > 0) result[group] = picked;
+  }
+
+  return Object.keys(result).length > 0 ? result : null;
+}
+
 @Injectable()
 export class ProductService {
   constructor(
@@ -22,6 +77,9 @@ export class ProductService {
     const {
       name,
       description,
+      brand,
+      modelName,
+      gender = 'male',
       categoryId,
       subCategoryId,
       basePrice,
@@ -30,7 +88,7 @@ export class ProductService {
       options = [],
       defaultVariant,
       generatedVariants = [],
-      labels = [],
+      attributes,
     } = data;
 
     const seller = await this.prisma.seller.findUnique({
@@ -45,11 +103,13 @@ export class ProductService {
       };
     }
 
-    if (!labels || labels.length === 0) {
-      return {
-        success: false,
-        message: "At least one label is required",
-      };
+    assertValidDescription(description);
+    assertValidBrand(brand);
+    assertValidModelName(modelName);
+    assertValidGender(gender);
+
+    if (generatedVariants.length === 0 && !defaultVariant) {
+      throw new BadRequestException("At least one variant is required");
     }
 
     let fetchedCategory = null;
@@ -91,8 +151,11 @@ export class ProductService {
         categoryName: fetchedCategory?.name,
         subCategoryName: fetchedSubCategory?.name,
         options: options,
-        labels: labels,
+        brand,
+        modelName,
+        gender,
       });
+      const productAttributes = sanitizeAttributes(attributes);
 
       const result = await this.prisma.$transaction(async (tx) => {
         // Create the base product
@@ -100,9 +163,12 @@ export class ProductService {
           data: {
             seller: { connect: { id: userId } },
             name,
-            description,
-            labels,
+            description: description.trim(),
+            brand: brand.trim(),
+            modelName: modelName.trim(),
+            gender,
             searchTags,
+            ...(productAttributes ? { attributes: productAttributes } : {}),
             ...(categoryId ? {
               category: {
                 connect: {
@@ -1081,11 +1147,14 @@ export class ProductService {
       productId,
       name,
       description,
+      brand,
+      modelName,
+      gender,
       categoryId,
       subCategoryId,
       basePrice,
       images,
-      labels,
+      attributes,
     } = data;
 
     const product = await this.prisma.product.findUnique({
@@ -1107,9 +1176,10 @@ export class ProductService {
       throw new BadRequestException("Error while updating the product");
     }
 
-    if (labels !== undefined && (!Array.isArray(labels) || labels.length === 0)) {
-      throw new BadRequestException("At least one label is required");
-    }
+    if (description !== undefined) assertValidDescription(description);
+    if (brand !== undefined) assertValidBrand(brand);
+    if (modelName !== undefined) assertValidModelName(modelName);
+    if (gender !== undefined) assertValidGender(gender);
 
     let fetchedCategory = product.category;
     let fetchedSubCategory = product.subCategory;
@@ -1144,7 +1214,9 @@ export class ProductService {
       categoryName: fetchedCategory?.name,
       subCategoryName: fetchedSubCategory?.name,
       options: product.options,
-      labels: labels !== undefined ? labels : product.labels,
+      brand: brand !== undefined ? brand : product.brand,
+      modelName: modelName !== undefined ? modelName : product.modelName,
+      gender: gender !== undefined ? gender : product.gender,
     });
 
     const updatedProduct = await this.prisma.product.update({
@@ -1153,7 +1225,10 @@ export class ProductService {
       },
       data: {
         ...(name && { name }),
-        ...(description && { description }),
+        ...(description && { description: description.trim() }),
+        ...(brand && { brand: brand.trim() }),
+        ...(modelName && { modelName: modelName.trim() }),
+        ...(gender && { gender }),
         ...(categoryId && {
           category: {
             connect: { id: categoryId },
@@ -1166,7 +1241,7 @@ export class ProductService {
         }),
         ...(basePrice && { basePrice: parseFloat(basePrice) }),
         ...(images && { images }),
-        ...(labels && { labels }),
+        ...(attributes !== undefined && { attributes: sanitizeAttributes(attributes) }),
         searchTags
       }
     });

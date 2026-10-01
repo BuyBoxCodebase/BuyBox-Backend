@@ -22,7 +22,7 @@ export class ToolsService implements OnModuleInit {
 Infer values from the full conversation — not just the latest message.
 For example, if the user previously asked for "red Nike shoes" and now says "show me something under $50",
 you should pass colour="red", brand="Nike", maxPrice=50 together.`,
-        parameters: jsonSchema({
+        inputSchema: jsonSchema({
           type: 'object',
           properties: {
             productName: {
@@ -60,7 +60,8 @@ you should pass colour="red", brand="Nike", maxPrice=50 together.`,
             },
             gender: {
               type: 'string',
-              description: 'Gender if explicitly stated (e.g. "mens", "womens"). Omit if not mentioned.'
+              enum: ['male', 'female', 'unisex'],
+              description: 'Only three values exist. "male" for men/boys/his, "female" for women/girls/her, "unisex" for unisex/everyone. Omit if the user did not state a gender.'
             },
             sortPreference: {
               type: 'string',
@@ -74,7 +75,6 @@ you should pass colour="red", brand="Nike", maxPrice=50 together.`,
 
           // Map tool args directly into the Intent shape SearchService already understands
           const intent = {
-            label: null,
             productName: args.productName ?? null,
             category: args.category ?? null,
             brand: args.brand ?? null,
@@ -100,7 +100,7 @@ you should pass colour="red", brand="Nike", maxPrice=50 together.`,
 
       check_stock: tool({
         description: 'Check if a specific product variant is in stock.',
-        parameters: jsonSchema({
+        inputSchema: jsonSchema({
           type: 'object',
           properties: {
             productId: { type: 'string' }

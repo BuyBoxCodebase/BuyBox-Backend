@@ -24,7 +24,9 @@ async function main() {
       categoryName: product.category?.name,
       subCategoryName: product.subCategory?.name,
       options: product.options,
-      labels: product.labels,
+      brand: product.brand,
+      modelName: product.modelName,
+      gender: product.gender,
     });
     console.log(searchTags);
     await prisma.product.update({

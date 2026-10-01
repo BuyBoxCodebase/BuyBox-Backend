@@ -150,8 +150,10 @@ model Product {
   subCategoryId  String?          @db.ObjectId
   subCategory    SubCategory?     @relation(fields: [subCategoryId], references: [id])
   basePrice      Float
+  brand          String?
+  modelName      String?
+  gender         String?          // 'male' | 'female' | 'all'
   attributes     Json?
-  labels         String[]         @default([])
   searchTags     String[]         @default([])
   inventory      Inventory[]
   cartItems      CartItem[]
@@ -164,6 +166,8 @@ model Product {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([searchTags])
 }
 
 model ProductOption {

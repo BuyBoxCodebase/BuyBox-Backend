@@ -2,7 +2,9 @@ export function generateSearchTags(data: {
   categoryName?: string;
   subCategoryName?: string;
   options?: { name: string; values: ({ value: string } | string)[] }[];
-  labels?: string[];
+  brand?: string | null;
+  modelName?: string | null;
+  gender?: string | null;
 }): string[] {
   const tags = new Set<string>();
 
@@ -16,6 +18,18 @@ export function generateSearchTags(data: {
     tags.add(`subcategory:${clean(data.subCategoryName)}`);
   }
 
+  if (data.brand) {
+    tags.add(`brand:${clean(data.brand)}`);
+  }
+
+  if (data.modelName) {
+    tags.add(`model:${clean(data.modelName)}`);
+  }
+
+  if (data.gender) {
+    tags.add(`gender:${clean(data.gender)}`);
+  }
+
   if (data.options) {
     for (const option of data.options) {
       const optionNameClean = clean(option.name).replace(/\s+/g, '');
@@ -23,12 +37,6 @@ export function generateSearchTags(data: {
         const valueStr = typeof val === 'string' ? val : val.value;
         tags.add(`${optionNameClean}:${clean(valueStr)}`);
       }
-    }
-  }
-
-  if (data.labels) {
-    for (const label of data.labels) {
-      tags.add(`label:${clean(label)}`);
     }
   }
 

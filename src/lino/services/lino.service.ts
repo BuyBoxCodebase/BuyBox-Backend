@@ -87,7 +87,7 @@ FIELD EXTRACTION RULES:
 - minPrice: Set when user says "above", "over", or "more than" a price value.
 - maxPrice: Set when user says "under", "below", "up to", or "less than" a price value.
 - occasion: Set when user mentions a context like "party", "wedding", "gym", "work", "casual".
-- gender: Set only if explicitly stated (e.g. "men's", "women's", "kids"). Never infer from product type.
+- gender: Only three values exist — "male", "female", "unisex". Map "men's", "guys", "for him", "boys" → "male"; "women's", "ladies", "for her", "girls" → "female"; "unisex", "for anyone", "for everyone" → "unisex". Set only if the user states it; never infer from product type. Searching "male" or "female" also includes unisex products.
 - sortPreference: Set if user says "cheapest", "newest", "most popular", etc.
 
 CONTEXT CARRY-FORWARD (CRITICAL):

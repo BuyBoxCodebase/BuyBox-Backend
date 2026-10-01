@@ -1,11 +1,6 @@
 import { z } from 'zod';
 
 export const IntentSchema = z.object({
-  label: z
-    .string()
-    .nullable()
-    .describe('Broad search intent or keyword explicitly mentioned by the user, or null if none'),
-
   productName: z
     .string()
     .nullable()
@@ -32,9 +27,9 @@ export const IntentSchema = z.object({
     .describe('Occasion explicitly mentioned by the user, or null if none'),
 
   gender: z
-    .string()
+    .enum(['male', 'female', 'unisex'])
     .nullable()
-    .describe('Gender explicitly mentioned by the user, or null if none'),
+    .describe('Gender explicitly mentioned by the user: male, female or unisex, or null if none'),
 
   size: z
     .string()

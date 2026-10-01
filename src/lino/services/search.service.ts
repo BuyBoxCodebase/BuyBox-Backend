@@ -26,71 +26,47 @@ export class SearchService {
       }
     }
     
-    // Construct Prisma query based on extracted intent
-    const whereClause: any = { AND: [] };
-
     const clean = (str: string) => str.toLowerCase().trim();
+    const and: any[] = [];
 
-    // Text search fallback to name, description, or searchTags matching general term
-    if (intent.productName && !intent.productName.toLowerCase().includes("shoe")) {
-      const searchTerm = intent.productName;
-      const termClean = clean(searchTerm);
-      whereClause.AND.push({
-        OR: [
-          { name: { contains: searchTerm, mode: 'insensitive' } },
-          { labels: { has: termClean } },
-          { description: { contains: searchTerm, mode: 'insensitive' } },
-          { searchTags: { hasSome: [termClean] } }
-        ]
-      });
+    // Most filters are pre-computed into searchTags (see generateSearchTags) — match those directly.
+    // Each entry is OR-ed within itself and AND-ed with the others.
+    const tagFilters: string[][] = [];
+    if (intent.category) tagFilters.push([`category:${clean(intent.category)}`, `subcategory:${clean(intent.category)}`]);
+    if (intent.brand) tagFilters.push([`brand:${clean(intent.brand)}`]);
+    if (intent.colour) tagFilters.push([`color:${clean(intent.colour)}`, `colour:${clean(intent.colour)}`]);
+    if (intent.size) tagFilters.push([`size:${clean(intent.size)}`]);
+    if (intent.gender) {
+      const gender = clean(intent.gender);
+      tagFilters.push(gender === 'unisex' ? ['gender:unisex'] : [`gender:${gender}`, 'gender:unisex']);
+    }
+    for (const tags of tagFilters) {
+      and.push({ searchTags: { hasSome: tags } });
     }
 
-    if (intent.category) {
-      const termClean = clean(intent.category);
-      whereClause.AND.push({
+    // Free-text product name — match it against name, model name, and description.
+    // Generic words like "shoes" aren't product names, so skip them rather than filter everything out.
+    if (intent.productName && !clean(intent.productName).includes('shoe')) {
+      and.push({
         OR: [
-          { name: { contains: intent.category, mode: 'insensitive' } },
-          { description: { contains: intent.category, mode: 'insensitive' } },
-          { searchTags: { hasSome: [`category:${termClean}`, `subcategory:${termClean}`, termClean] } }
-        ]
-      });
-    }
-
-    if (intent.colour) {
-      const termClean = clean(intent.colour);
-      whereClause.AND.push({
-        OR: [
-          { name: { contains: intent.colour, mode: 'insensitive' } },
-          { description: { contains: intent.colour, mode: 'insensitive' } },
-          { searchTags: { hasSome: [`color:${termClean}`, termClean] } }
-        ]
-      });
-    }
-
-    if (intent.size) {
-      const termClean = clean(intent.size);
-      whereClause.AND.push({
-        OR: [
-          { name: { contains: intent.size, mode: 'insensitive' } },
-          { description: { contains: intent.size, mode: 'insensitive' } },
-          { searchTags: { hasSome: [`size:${termClean}`, termClean] } }
-        ]
+          { name: { contains: intent.productName, mode: 'insensitive' } },
+          { modelName: { contains: intent.productName, mode: 'insensitive' } },
+          { description: { contains: intent.productName, mode: 'insensitive' } },
+        ],
       });
     }
 
     if (intent.minPrice != null || intent.maxPrice != null) {
-      const priceFilter: any = {};
-      if (intent.minPrice != null) priceFilter.gte = intent.minPrice;
-      if (intent.maxPrice != null) priceFilter.lte = intent.maxPrice;
-      whereClause.AND.push({ basePrice: priceFilter });
+      and.push({
+        basePrice: {
+          ...(intent.minPrice != null && { gte: intent.minPrice }),
+          ...(intent.maxPrice != null && { lte: intent.maxPrice }),
+        },
+      });
     }
 
-    if (whereClause.AND.length === 0) {
-      delete whereClause.AND;
-    }
+    const whereClause = and.length > 0 ? { AND: and } : {};
 
-    console.log(JSON.stringify(whereClause, null, 2));
-    console.log("where")
     try {
       const products = await this.prisma.product.findMany({
         where: whereClause,
@@ -107,6 +83,9 @@ export class SearchService {
       return products.map(p => ({
         id: p.id,
         name: p.name,
+        brand: p.brand,
+        modelName: p.modelName,
+        gender: p.gender,
         price: p.basePrice,
         availableVariants: p.variants.length,
         image: p.images && p.images.length > 0 ? p.images[0] : null
