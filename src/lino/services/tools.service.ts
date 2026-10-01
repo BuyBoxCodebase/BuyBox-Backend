@@ -1,5 +1,39 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { SearchService } from './search.service';
+import { z } from 'zod';
+
+const SearchProductsSchema = z.object({
+  productName: z.string().optional().describe(
+    'Specific product name e.g. "Air Force 1", "Jordan 4". Do NOT use generic terms like "shoes" or "sneakers" — use category instead.'
+  ),
+  category: z.enum(['Sneakers', 'Training', 'Lifestyle', 'Basketball', 'Running']).optional().describe(
+    'Product category. Use when user mentions a type of footwear or sport.'
+  ),
+  brand: z.string().optional().describe(
+    'Brand name explicitly mentioned e.g. "Nike", "Adidas". Never infer from product type.'
+  ),
+  colour: z.string().optional().describe(
+    'Colour explicitly mentioned e.g. "red", "black". Carry forward from prior searches unless user changes it.'
+  ),
+  size: z.string().optional().describe(
+    'Size value e.g. "8", "XL", "42". Omit if not mentioned.'
+  ),
+  minPrice: z.number().optional().describe(
+    'Minimum price. Set when user says "above", "over", or "more than" a value.'
+  ),
+  maxPrice: z.number().optional().describe(
+    'Maximum price. Set when user says "under", "below", "up to", or "less than" a value.'
+  ),
+  occasion: z.string().optional().describe(
+    'Occasion e.g. "wedding", "party", "gym". Omit if not mentioned.'
+  ),
+  gender: z.string().optional().describe(
+    'Gender if explicitly stated e.g. "mens", "womens". Never infer from product type.'
+  ),
+  sortPreference: z.string().optional().describe(
+    'Sort preference e.g. "cheapest", "newest". Omit if not mentioned.'
+  ),
+});
 
 @Injectable()
 export class ToolsService implements OnModuleInit {
@@ -14,65 +48,19 @@ export class ToolsService implements OnModuleInit {
 
   getTools() {
     if (!this.ai) throw new Error('AI module not initialized');
-    const { tool, jsonSchema } = this.ai;
+    const { tool } = this.ai;
 
     return {
       search_products: tool({
-        description: `Search the product catalog. Extract all relevant fields from the conversation context and pass them directly.
-Infer values from the full conversation — not just the latest message.
-For example, if the user previously asked for "red Nike shoes" and now says "show me something under $50",
-you should pass colour="red", brand="Nike", maxPrice=50 together.`,
-        parameters: jsonSchema({
-          type: 'object',
-          properties: {
-            productName: {
-              type: 'string',
-              description: 'Specific product name (e.g. "Air Force 1", "Puma 350"). Do NOT use generic terms like "shoes" or "sneakers" here — use category instead. Omit if not mentioned.'
-            },
-            category: {
-              type: 'string',
-              enum: ['Sneakers', 'Training', 'Lifestyle', 'Basketball', 'Running'],
-              description: 'Product category. Omit if not clearly applicable.'
-            },
-            brand: {
-              type: 'string',
-              description: 'Brand name explicitly mentioned (e.g. "Nike", "Adidas"). Omit if not mentioned.'
-            },
-            colour: {
-              type: 'string',
-              description: 'Colour explicitly mentioned (e.g. "red", "black"). Carry forward from prior turns if still relevant.'
-            },
-            size: {
-              type: 'string',
-              description: 'Size value (e.g. "8", "XL", "42"). Omit if not mentioned.'
-            },
-            minPrice: {
-              type: 'number',
-              description: 'Minimum price if the user set a lower bound (e.g. "above $50" → 50). Omit if not mentioned.'
-            },
-            maxPrice: {
-              type: 'number',
-              description: 'Maximum price if the user set an upper bound (e.g. "under $100" → 100). Omit if not mentioned.'
-            },
-            occasion: {
-              type: 'string',
-              description: 'Occasion mentioned (e.g. "wedding", "party", "gym"). Omit if not mentioned.'
-            },
-            gender: {
-              type: 'string',
-              description: 'Gender if explicitly stated (e.g. "mens", "womens"). Omit if not mentioned.'
-            },
-            sortPreference: {
-              type: 'string',
-              description: 'Sort preference like "cheap", "newest". Omit if not mentioned.'
-            }
-          },
-          required: []
-        }),
-        execute: async (args: any) => {
+        description: `Search the product catalog.
+Extract all relevant fields from the ACTIVE FILTERS in the system prompt and the current message.
+Always carry forward filters from ACTIVE FILTERS unless the user explicitly changes them.
+For example, if ACTIVE FILTERS show colour: red and the user says "show me something under $50", pass colour="red" AND maxPrice=50.
+Never call with all fields omitted — always pass at least the fields shown in ACTIVE FILTERS.`,
+        inputSchema: SearchProductsSchema,
+        execute: async (args: z.infer<typeof SearchProductsSchema>) => {
           this.logger.log(`🛠️ search_products called with: ${JSON.stringify(args)}`);
 
-          // Map tool args directly into the Intent shape SearchService already understands
           const intent = {
             label: null,
             productName: args.productName ?? null,
@@ -90,27 +78,19 @@ you should pass colour="red", brand="Nike", maxPrice=50 together.`,
           };
 
           const results = await this.searchService.searchProductsV2(intent);
-
-          return {
-            results_found: results.length,
-            products: results,
-          };
-        }
+          return { results_found: results.length, products: results };
+        },
       } as any),
 
       check_stock: tool({
         description: 'Check if a specific product variant is in stock.',
-        parameters: jsonSchema({
-          type: 'object',
-          properties: {
-            productId: { type: 'string' }
-          },
-          required: ['productId']
+        inputSchema: z.object({
+          productId: z.string().describe('The product ID to check stock for.'),
         }),
         execute: async ({ productId }: { productId: string }) => {
-          return { productId, status: 'In Stock', quantity: 15 }; // Placeholder
-        }
-      } as any)
+          return { productId, status: 'In Stock', quantity: 15 };
+        },
+      } as any),
     };
   }
 }

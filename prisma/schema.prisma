@@ -682,8 +682,9 @@ model UserEvent {
 model LinoConversation {
   id         String        @id @default(auto()) @map("_id") @db.ObjectId
   sessionId  String        @unique
-  userId     String?       // null for guest chats; populated when user is authenticated
-  title      String?       // auto-set from the first user message (first 60 chars)
+  userId     String?
+  title      String?
+  lastIntent Json?         // last search_products args, injected into system prompt for context carry-forward
   messages   LinoMessage[]
 
   createdAt  DateTime      @default(now())
@@ -696,10 +697,9 @@ model LinoMessage {
   id                 String           @id @default(auto()) @map("_id") @db.ObjectId
   linoConversationId String           @db.ObjectId
   conversation       LinoConversation @relation(fields: [linoConversationId], references: [id], onDelete: Cascade)
-  role               String           // 'user', 'assistant', 'tool'
-  content            String           // plain text, or '__STRUCTURED__' if contentJson is used
-  contentJson        Json?            // structured content for tool-call / tool-result messages
-  metadata           Json?            // store products etc.
-  
+  role               String           // 'user' | 'assistant'
+  content            String
+  metadata           Json?            // products shown to user
+
   createdAt          DateTime         @default(now())
 }
