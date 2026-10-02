@@ -1,17 +1,16 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { AiProviderService } from './ai-provider.service';
 import { ToolsService } from './tools.service';
-import type { ModelMessage } from 'ai';
 import { PrismaService } from '../../prisma/prisma.service';
 
-const LINO_SYSTEM_PROMPT = `PERSONALITY & LANGUAGE:
+const LINO_BASE_PROMPT = `PERSONALITY & LANGUAGE:
 
 Lino should feel like a stylish, knowledgeable friend who happens to be exceptionally good at finding products.
 
 * Be playful, confident, warm, and naturally conversational.
 * Use modern, contemporary language that feels natural to Gen Z.
 * Use light slang when appropriate, such as:
-  "say less", "clean", "fire", "fresh", "tough", "that’s a vibe", "goes hard", "good pick", "got you".
+  "say less", "clean", "fire", "fresh", "tough", "that's a vibe", "goes hard", "good pick", "got you".
 * Never force slang into every response.
 * Match the customer's energy and language. If they are casual, be casual. If they are more formal, respond naturally without excessive slang.
 * Keep responses short, smooth, and easy to read.
@@ -25,16 +24,16 @@ Customer: "find me some black kicks"
 Lino: "Say less. Let me find you some clean black kicks."
 
 Customer: "anything fire for a party?"
-Lino: "Got you. Let’s find something that goes hard for the party."
+Lino: "Got you. Let's find something that goes hard for the party."
 
 Customer: "do you have air force 1s?"
-Lino: "Yep — let me check what’s available."
+Lino: "Yep — let me check what's available."
 
 Customer: "thanks"
 Lino: "Anytime 🤝"
 
 Customer: "show me something for a wedding"
-Lino: "Got you. Let’s keep it clean and wedding-ready."
+Lino: "Got you. Let's keep it clean and wedding-ready."
 
 IMPORTANT:
 Lino's personality must NEVER change, override, or invent factual information.
@@ -75,14 +74,12 @@ If the user asks for a product, always execute the search_products tool first.
 
 SEARCH_PRODUCTS TOOL — HOW TO FILL PARAMETERS:
 
-When calling search_products, you are responsible for extracting and structuring the intent from the full conversation history — not just the latest message. Read the entire conversation before deciding what to pass.
-
 FIELD EXTRACTION RULES:
 
 - productName: Use ONLY for specific named products (e.g. "Air Force 1", "Puma Suede", "Jordan 4"). Do NOT put generic words like "shoes", "sneakers", "shirt" here — use category for those. Omit if not applicable.
 - category: Map to one of: "Sneakers", "Training", "Lifestyle", "Basketball", "Running". Use when the user mentions a type of footwear or sport. Omit if not applicable.
 - brand: Extract only if the user explicitly names a brand (e.g. "Nike", "Adidas", "New Balance"). Never infer a brand from a product type.
-- colour: Extract if the user mentions a colour (e.g. "red", "black", "white"). Always carry this forward on follow-up queries unless the user explicitly changes it.
+- colour: Extract if the user mentions a colour (e.g. "red", "black", "white").
 - size: Extract only if the user states a size (e.g. "size 9", "XL", "42"). Omit if not mentioned.
 - minPrice: Set when user says "above", "over", or "more than" a price value.
 - maxPrice: Set when user says "under", "below", "up to", or "less than" a price value.
@@ -91,29 +88,38 @@ FIELD EXTRACTION RULES:
 - sortPreference: Set if user says "cheapest", "newest", "most popular", etc.
 
 CONTEXT CARRY-FORWARD (CRITICAL):
-On every follow-up search, merge new constraints with what was already established in prior turns. Do not reset fields the user did not change.
+Active filters from the previous search are shown below under ACTIVE FILTERS.
+On every new search, start from those active filters and apply only what the user changed or added.
+Do not reset fields the user did not explicitly change.
+Use judgement: if the user clearly starts a new, unrelated search, or says a filter no longer matters (e.g. "any colour is fine"), drop the filters that no longer apply.
 
 Examples:
-  Turn 1: "show me red Nike sneakers"
-  → call: { colour: "red", brand: "Nike", category: "Sneakers" }
-
-  Turn 2: "now show me something under $80"
+  ACTIVE FILTERS: colour: red, brand: Nike, category: Sneakers
+  User: "now show me something under $80"
   → call: { colour: "red", brand: "Nike", category: "Sneakers", maxPrice: 80 }
 
-  Turn 1: "find me black running shoes"
-  → call: { colour: "black", category: "Running" }
+  ACTIVE FILTERS: colour: red
+  User: "i want above 35"
+  → call: { colour: "red", minPrice: 35 }
 
-  Turn 2: "show me the same but in white"
+  ACTIVE FILTERS: colour: black, category: Running
+  User: "show me the same but in white"
   → call: { colour: "white", category: "Running" }
 
-  Turn 1: "any Adidas for the gym?"
-  → call: { brand: "Adidas", category: "Training" }
-
-  Turn 2: "what about size 10?"
+  ACTIVE FILTERS: brand: Adidas, category: Training
+  User: "what about size 10?"
   → call: { brand: "Adidas", category: "Training", size: "10" }
 
+  ACTIVE FILTERS: colour: red, minPrice: 35
+  User: "any colour is fine"
+  → call: { minPrice: 35 }
+
+  ACTIVE FILTERS: colour: red, category: Sneakers
+  User: "actually i need a formal shirt for a wedding"
+  → call: { productName: "formal shirt", occasion: "wedding" }
+
 OMISSION RULES:
-- Omit any field not explicitly mentioned. Do not pass null, empty string, or 0 — simply leave the field out.
+- Omit any field not explicitly mentioned or carried forward. Do not pass null, empty string, or 0 — simply leave the field out.
 - Do not guess. "cheap shoes" does not mean maxPrice — omit price entirely.
 - Do not infer gender from category or brand.
 
@@ -149,6 +155,61 @@ Lino: "Math isn't my strong suit, but style is. Want me to find you something?"
 Keep the decline short, light, and on-brand. Never be rude or dismissive. Always offer to help with shopping immediately after.
 `;
 
+function buildSystemPrompt(lastIntent: Record<string, any> | null): string {
+  if (!lastIntent || Object.keys(lastIntent).length === 0) {
+    return LINO_BASE_PROMPT + '\nACTIVE FILTERS: none — this is a fresh search.';
+  }
+
+  const lines = Object.entries(lastIntent)
+    .filter(([, v]) => v !== null && v !== undefined)
+    .map(([k, v]) => `  ${k}: ${v}`);
+
+  return LINO_BASE_PROMPT + '\nACTIVE FILTERS (carry these forward unless the user changes them):\n' + lines.join('\n');
+}
+
+function extractIntentFromMessages(responseMessages: any[]): Record<string, any> | null {
+  let intent: Record<string, any> | null = null;
+  for (const msg of responseMessages) {
+    if (msg.role === 'assistant' && Array.isArray(msg.content)) {
+      for (const part of msg.content) {
+        if (part.type === 'tool-call' && part.toolName === 'search_products') {
+          const args = part.input ?? part.args ?? {};
+          if (Object.keys(args).length > 0) intent = args;
+        }
+      }
+    }
+  }
+  return intent;
+}
+
+// Repeats the active filters right next to the latest user message (model-only, not persisted)
+// so they aren't lost at the bottom of the long system prompt.
+function withActiveFilters(message: string, lastIntent: Record<string, any> | null): string {
+  const entries = Object.entries(lastIntent ?? {}).filter(([, v]) => v !== null && v !== undefined);
+  if (entries.length === 0) return message;
+  const filters = entries.map(([k, v]) => `${k}: ${v}`).join(', ');
+  return `[ACTIVE FILTERS from previous search: ${filters}]
+
+${message}`;
+}
+
+function extractProductsFromMessages(responseMessages: any[]): any[] {
+  for (const msg of responseMessages) {
+    if (msg.role === 'tool' && Array.isArray(msg.content)) {
+      for (const part of msg.content) {
+        if (part.type === 'tool-result' && part.toolName === 'search_products') {
+          const products =
+            (part.result as any)?.products ??
+            (part.output as any)?.value?.products ??
+            (part.output as any)?.products;
+          if (Array.isArray(products) && products.length > 0) return products;
+        }
+      }
+    }
+  }
+  return [];
+}
+
 @Injectable()
 export class LinoService implements OnModuleInit {
   private readonly logger = new Logger(LinoService.name);
@@ -165,187 +226,144 @@ export class LinoService implements OnModuleInit {
   }
 
   private async getOrCreateConversation(sessionId: string, initialMessage: string, userId?: string) {
-    let conversation = await this.prisma.linoConversation.findUnique({
-      where: { sessionId },
-    });
+    let conversation = await this.prisma.linoConversation.findUnique({ where: { sessionId } });
     if (!conversation) {
       conversation = await this.prisma.linoConversation.create({
-        data: {
-          sessionId,
-          userId: userId ?? null,
-          title: initialMessage.slice(0, 60),
-        },
+        data: { sessionId, userId: userId ?? null, title: initialMessage.slice(0, 60) },
       });
     }
     return conversation;
   }
 
-  private async loadModelHistory(conversationId: string): Promise<ModelMessage[]> {
-    const rawMessages = await this.prisma.linoMessage.findMany({
+  private async loadHistory(conversationId: string) {
+    const messages = await this.prisma.linoMessage.findMany({
       where: { linoConversationId: conversationId },
       orderBy: { createdAt: 'desc' },
       take: 15,
     });
-
-    rawMessages.reverse();
-
-    return rawMessages.map((m) => {
-      if (m.contentJson) {
-        const content = (m.contentJson as any[]).map((part: any) => {
-          const { providerOptions, ...rest } = part;
-          return rest;
-        });
-        return {
-          role: m.role as any,
-          content,
-        };
-      }
-      return {
-        role: m.role as any,
-        content: m.content,
-      };
-    });
-  }
-
-  private extractProductsFromMessages(responseMessages: any[]): any[] {
-    for (const msg of responseMessages) {
-      if (msg.role === 'tool' && Array.isArray(msg.content)) {
-        for (const part of msg.content) {
-          if (part.type === 'tool-result' && part.toolName === 'search_products') {
-            const products = 
-              (part.result as any)?.products ?? 
-              (part.output as any)?.value?.products ?? 
-              (part.output as any)?.products;
-              
-            if (Array.isArray(products) && products.length > 0) {
-              return products;
-            }
-          }
-        }
-      }
-    }
-    return [];
-  }
-
-  private async saveResponseMessages(conversationId: string, responseMessages: any[], products: any[]) {
-    for (let i = 0; i < responseMessages.length; i++) {
-      const msg = responseMessages[i];
-      const isLast = i === responseMessages.length - 1;
-      const isAssistantWithText = msg.role === 'assistant' && typeof msg.content === 'string';
-
-      await this.prisma.linoMessage.create({
-        data: {
-          linoConversationId: conversationId,
-          role: msg.role,
-          content: isAssistantWithText ? msg.content : '__STRUCTURED__',
-          contentJson: isAssistantWithText ? null : (msg.content as any),
-          metadata: isLast && products.length > 0 ? { products } : null,
-        },
-      });
-    }
+    messages.reverse();
+    return messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
   }
 
   async handleChat(sessionId: string, message: string, userId?: string) {
     const conversation = await this.getOrCreateConversation(sessionId, message, userId);
-    const history = await this.loadModelHistory(conversation.id);
+    const history = await this.loadHistory(conversation.id);
+    const activeFilters = conversation.lastIntent as Record<string, any> | null;
+    const systemPrompt = buildSystemPrompt(activeFilters);
 
-    history.push({ role: 'user', content: message });
+    history.push({ role: 'user', content: withActiveFilters(message, activeFilters) });
     await this.prisma.linoMessage.create({
-      data: {
-        linoConversationId: conversation.id,
-        role: 'user',
-        content: message,
-      },
+      data: { linoConversationId: conversation.id, role: 'user', content: message },
     });
 
     const model = this.aiProvider.getModel();
     const { generateText, isStepCount } = this.ai;
-
     this.logger.log(`Processing chat for session: ${sessionId}`);
 
     const result = await generateText({
       model,
-      system: LINO_SYSTEM_PROMPT,
+      system: systemPrompt,
       messages: history,
       tools: this.toolsService.getTools(),
       stopWhen: isStepCount(5),
     });
+
     const responseMessages = result.responseMessages || [];
-    const products = this.extractProductsFromMessages(responseMessages);
+    const products = extractProductsFromMessages(responseMessages);
+    const newIntent = extractIntentFromMessages(responseMessages);
 
-    await this.saveResponseMessages(conversation.id, responseMessages, products);
+    await this.prisma.linoMessage.create({
+      data: {
+        linoConversationId: conversation.id,
+        role: 'assistant',
+        content: result.text,
+        metadata: products.length > 0 ? { products } : null,
+      },
+    });
 
-    return {
-      reply: result.text,
-      products,
-    };
+    if (newIntent) {
+      await this.prisma.linoConversation.update({
+        where: { id: conversation.id },
+        data: { lastIntent: newIntent },
+      });
+    }
+
+    return { reply: result.text, products };
   }
 
   async handleChatStream(sessionId: string, message: string, res: any, userId?: string) {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-
     res.write(`data: ${JSON.stringify({ type: 'status', message: 'Analyzing your request...' })}\n\n`);
 
     try {
       const conversation = await this.getOrCreateConversation(sessionId, message, userId);
-      const history = await this.loadModelHistory(conversation.id);
+      const history = await this.loadHistory(conversation.id);
+      const activeFilters = conversation.lastIntent as Record<string, any> | null;
+      const systemPrompt = buildSystemPrompt(activeFilters);
 
-      history.push({ role: 'user', content: message });
+      history.push({ role: 'user', content: withActiveFilters(message, activeFilters) });
       await this.prisma.linoMessage.create({
-        data: {
-          linoConversationId: conversation.id,
-          role: 'user',
-          content: message,
-        },
+        data: { linoConversationId: conversation.id, role: 'user', content: message },
       });
 
       const model = this.aiProvider.getModel();
       const { streamText, isStepCount } = this.ai;
-
       this.logger.log(`Processing chat stream for session: ${sessionId}`);
 
       const result = streamText({
         model,
-        system: LINO_SYSTEM_PROMPT,
+        system: systemPrompt,
         messages: history,
         tools: this.toolsService.getTools(),
         stopWhen: isStepCount(5),
       });
 
       let streamedProducts: any[] = [];
+      let fullText = '';
 
       for await (const chunk of result.fullStream) {
         if (chunk.type === 'text-delta') {
+          fullText += chunk.text;
           res.write(`data: ${JSON.stringify({ type: 'text', chunk: chunk.text })}\n\n`);
         } else if (chunk.type === 'tool-call') {
           const statusText = chunk.toolName === 'search_products'
             ? 'Searching catalog for products...'
             : 'Working on it...';
           res.write(`data: ${JSON.stringify({ type: 'status', message: statusText })}\n\n`);
-        } else if (chunk.type === 'tool-result') {
-          if (chunk.toolName === 'search_products') {
-            const foundProducts = 
-              (chunk as any).result?.products || 
-              (chunk as any).output?.value?.products || 
-              (chunk as any).output?.products || [];
-              
-            if (Array.isArray(foundProducts) && foundProducts.length > 0) {
-              streamedProducts = foundProducts;
-              res.write(`data: ${JSON.stringify({ type: 'products', products: streamedProducts })}\n\n`);
-            }
-            res.write(`data: ${JSON.stringify({ type: 'status', message: 'Summarizing results...' })}\n\n`);
+        } else if (chunk.type === 'tool-result' && chunk.toolName === 'search_products') {
+          const found =
+            (chunk as any).result?.products ||
+            (chunk as any).output?.value?.products ||
+            (chunk as any).output?.products || [];
+          if (Array.isArray(found) && found.length > 0) {
+            streamedProducts = found;
+            res.write(`data: ${JSON.stringify({ type: 'products', products: streamedProducts })}\n\n`);
           }
+          res.write(`data: ${JSON.stringify({ type: 'status', message: 'Summarizing results...' })}\n\n`);
         }
       }
 
       const responseMessages = (await result.responseMessages) || [];
-      const finalProducts = streamedProducts.length > 0
-        ? streamedProducts
-        : this.extractProductsFromMessages(responseMessages);
+      const finalProducts = streamedProducts.length > 0 ? streamedProducts : extractProductsFromMessages(responseMessages);
+      const newIntent = extractIntentFromMessages(responseMessages);
 
-      await this.saveResponseMessages(conversation.id, responseMessages, finalProducts);
+      await this.prisma.linoMessage.create({
+        data: {
+          linoConversationId: conversation.id,
+          role: 'assistant',
+          content: fullText,
+          metadata: finalProducts.length > 0 ? { products: finalProducts } : null,
+        },
+      });
+
+      if (newIntent) {
+        await this.prisma.linoConversation.update({
+          where: { id: conversation.id },
+          data: { lastIntent: newIntent },
+        });
+      }
 
       res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
       res.end();
@@ -359,10 +377,7 @@ export class LinoService implements OnModuleInit {
   async getAllConversations() {
     return this.prisma.linoConversation.findMany({
       include: {
-        messages: {
-          where: { role: { in: ['user', 'assistant'] }, content: { not: '__STRUCTURED__' } },
-          orderBy: { createdAt: 'asc' },
-        },
+        messages: { where: { role: { in: ['user', 'assistant'] } }, orderBy: { createdAt: 'asc' } },
       },
       orderBy: { createdAt: 'desc' },
     });
@@ -372,10 +387,7 @@ export class LinoService implements OnModuleInit {
     return this.prisma.linoConversation.findUnique({
       where: { sessionId },
       include: {
-        messages: {
-          where: { role: { in: ['user', 'assistant'] }, content: { not: '__STRUCTURED__' } },
-          orderBy: { createdAt: 'asc' },
-        },
+        messages: { where: { role: { in: ['user', 'assistant'] } }, orderBy: { createdAt: 'asc' } },
       },
     });
   }
