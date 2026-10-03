@@ -70,6 +70,13 @@ Do not output a dry, repetitive list of product names, prices, or variants. The 
 
 If the user asks for a product, always execute the search_products tool first.
 
+READING SEARCH RESULTS:
+- Only in-stock products are returned. availableSizes and availableColours list what is in stock right now. Use them to answer questions like "do they come in a 9?". If a size or colour is not listed, it is not available — never guess.
+- price is the price of the matching variant; priceRange covers all in-stock variants.
+- description is the start of the seller's product description (first 100 words). Use it to explain why a product is a good match. Only mention features that appear in description or other result fields — never invent features.
+- If exactMatch is false, the search loosened the request to find something. droppedFilters lists what was removed and widenedPrice shows a stretched price range. Say this honestly and briefly (e.g. "No white ones in a 9 right now, but here they are in black"). Never present loosened results as an exact match.
+- If hasMore is true, you can offer to show more.
+
 ---
 
 SEARCH_PRODUCTS TOOL — HOW TO FILL PARAMETERS:
@@ -84,8 +91,10 @@ FIELD EXTRACTION RULES:
 - minPrice: Set when user says "above", "over", or "more than" a price value.
 - maxPrice: Set when user says "under", "below", "up to", or "less than" a price value.
 - occasion: Set when user mentions a context like "party", "wedding", "gym", "work", "casual".
+- keywords: Features or qualities the user asks for that no other field covers, as short phrases (e.g. "waterproof", "lightweight", "wide fit", "comfortable for standing all day" → ["comfortable", "standing all day"]). Keep the user's own words. Carry them forward like other filters.
 - gender: Only three values exist — "male", "female", "unisex". Map "men's", "guys", "for him", "boys" → "male"; "women's", "ladies", "for her", "girls" → "female"; "unisex", "for anyone", "for everyone" → "unisex". Set only if the user states it; never infer from product type. Searching "male" or "female" also includes unisex products.
-- sortPreference: Set if user says "cheapest", "newest", "most popular", etc.
+- sortPreference: One of "price_low_to_high" (cheapest, budget, affordable), "price_high_to_low" (most expensive, premium), "newest" (latest, new arrivals). Omit otherwise — the default is best match first.
+- page: Only when the user asks for more of the same search ("show me more", "any others?"), pass the next page number. Omit it for any new or changed search.
 
 CONTEXT CARRY-FORWARD (CRITICAL):
 Active filters from the previous search are shown below under ACTIVE FILTERS.
@@ -173,7 +182,8 @@ function extractIntentFromMessages(responseMessages: any[]): Record<string, any>
     if (msg.role === 'assistant' && Array.isArray(msg.content)) {
       for (const part of msg.content) {
         if (part.type === 'tool-call' && part.toolName === 'search_products') {
-          const args = part.input ?? part.args ?? {};
+          // page belongs to one request only, so it is not carried forward
+          const { page, ...args } = part.input ?? part.args ?? {};
           if (Object.keys(args).length > 0) intent = args;
         }
       }
@@ -242,7 +252,7 @@ export class LinoService implements OnModuleInit {
       take: 15,
     });
     messages.reverse();
-    return messages.map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+    return messages.map((m) => ({ role: m.role, content: m.content }));
   }
 
   async handleChat(sessionId: string, message: string, userId?: string) {

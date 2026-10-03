@@ -1,5 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { SearchService } from './search.service';
+import { cleanFilters } from '../search/clean-filters';
+import { SORT_OPTIONS, SearchRequest } from '../search/search.types';
 import { z } from 'zod';
 
 const SearchProductsSchema = z.object({
@@ -25,15 +27,31 @@ const SearchProductsSchema = z.object({
     'Maximum price. Set when user says "under", "below", "up to", or "less than" a value.'
   ),
   occasion: z.string().optional().describe(
-    'Occasion e.g. "wedding", "party", "gym". Omit if not mentioned.'
+    'Occasion or activity e.g. "wedding", "party", "gym", "running". Used to rank better fits first, never to hide products. Omit if not mentioned.'
   ),
   gender: z.enum(['male', 'female', 'unisex']).optional().describe(
     'Only three values exist. "male" for men/boys/his, "female" for women/girls/her, "unisex" for unisex/everyone. Omit if the user did not state a gender. Never infer from product type.'
   ),
-  sortPreference: z.string().optional().describe(
-    'Sort preference e.g. "cheapest", "newest". Omit if not mentioned.'
+  keywords: z.array(z.string()).optional().describe(
+    'Features or qualities the user wants that no other field covers, as short phrases e.g. ["waterproof", "lightweight", "wide fit", "good arch support"]. Matched against product descriptions to rank better fits first, never to hide products. Omit if none.'
+  ),
+  sortPreference: z.enum(SORT_OPTIONS).optional().describe(
+    '"price_low_to_high" for cheapest/budget, "price_high_to_low" for most expensive/premium, "newest" for latest/new arrivals. Omit for the default (best match first).'
+  ),
+  page: z.number().int().min(1).optional().describe(
+    'Results page, 8 products per page. Set to the next page only when the user asks for more of the SAME search ("show me more", "any others?"). Omit for a new or changed search.'
   ),
 });
+
+type SearchProductsArgs = z.infer<typeof SearchProductsSchema>;
+
+function toSearchRequest(args: SearchProductsArgs): SearchRequest {
+  return {
+    filters: cleanFilters(args),
+    sort: args.sortPreference ?? 'relevance',
+    page: args.page ?? 1,
+  };
+}
 
 @Injectable()
 export class ToolsService implements OnModuleInit {
@@ -56,38 +74,12 @@ export class ToolsService implements OnModuleInit {
 Extract all relevant fields from the ACTIVE FILTERS in the system prompt and the current message.
 Always carry forward filters from ACTIVE FILTERS unless the user explicitly changes them.
 For example, if ACTIVE FILTERS show colour: red and the user says "show me something under $50", pass colour="red" AND maxPrice=50.
-Never call with all fields omitted — always pass at least the fields shown in ACTIVE FILTERS.`,
+Never call with all fields omitted — always pass at least the fields shown in ACTIVE FILTERS.
+Only in-stock products are returned, 8 per page. If nothing matched exactly, the search loosens filters itself and lists them in droppedFilters / widenedPrice.`,
         inputSchema: SearchProductsSchema,
-        execute: async (args: z.infer<typeof SearchProductsSchema>) => {
+        execute: async (args: SearchProductsArgs) => {
           this.logger.log(`🛠️ search_products called with: ${JSON.stringify(args)}`);
-
-          const intent = {
-            productName: args.productName ?? null,
-            category: args.category ?? null,
-            brand: args.brand ?? null,
-            colour: args.colour ?? null,
-            occasion: args.occasion ?? null,
-            gender: args.gender ?? null,
-            size: args.size ?? null,
-            minPrice: args.minPrice ?? null,
-            maxPrice: args.maxPrice ?? null,
-            currency: null,
-            deliveryDate: null,
-            sortPreference: args.sortPreference ?? null,
-          };
-
-          const results = await this.searchService.searchProductsV2(intent);
-          return { results_found: results.length, products: results };
-        },
-      } as any),
-
-      check_stock: tool({
-        description: 'Check if a specific product variant is in stock.',
-        inputSchema: z.object({
-          productId: z.string().describe('The product ID to check stock for.'),
-        }),
-        execute: async ({ productId }: { productId: string }) => {
-          return { productId, status: 'In Stock', quantity: 15 };
+          return this.searchService.search(toSearchRequest(args));
         },
       } as any),
     };

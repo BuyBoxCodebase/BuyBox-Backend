@@ -1,98 +1,95 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService } from '../../prisma/prisma.service';
-import { Intent } from '../dto/intent.schema';
+import { buildSearchAttempts } from '../search/search-attempts';
+import { sortMatches } from '../search/product-ranker';
+import { toProductResult } from '../search/product-result';
+import { SearchRepository } from '../search/search-repository';
+import { matchProduct } from '../search/variant-matcher';
+import {
+  CandidateProduct,
+  PAGE_SIZE,
+  ProductMatch,
+  SearchAttempt,
+  SearchFilters,
+  SearchRequest,
+  SearchResponse,
+} from '../search/search.types';
 
 @Injectable()
 export class SearchService {
   private readonly logger = new Logger(SearchService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly repository: SearchRepository) {}
 
-  async searchProductsV2(rawIntent: Intent) {
-    this.logger.log(`Searching database for intent: ${JSON.stringify(rawIntent)}`);
-    
-    // Sanitize the intent to handle models that pass "none", "null", or -1 instead of omitting fields
-    const intent: Partial<Intent> = {};
-    for (const [key, value] of Object.entries(rawIntent)) {
-      if (typeof value === 'string') {
-        const cleanVal = value.trim().toLowerCase();
-        if (cleanVal !== '' && cleanVal !== 'none' && cleanVal !== 'null') {
-          (intent as any)[key] = value.trim();
-        }
-      } else if (typeof value === 'number') {
-        if (value >= 0) {
-          (intent as any)[key] = value;
-        }
+  // Tries the exact search first, then looser versions until something is found.
+  async search(request: SearchRequest): Promise<SearchResponse> {
+    this.logger.log(`Searching for: ${JSON.stringify(request)}`);
+    const loadCandidates = this.createCandidateLoader(request);
+
+    for (const attempt of buildSearchAttempts(request.filters)) {
+      const candidates = await loadCandidates(attempt.filters);
+      const matches = findMatches(candidates, attempt.filters);
+      if (matches.length > 0) {
+        return this.buildResponse(request, attempt, matches);
       }
     }
-    
-    const clean = (str: string) => str.toLowerCase().trim();
-    const and: any[] = [];
 
-    // Most filters are pre-computed into searchTags (see generateSearchTags) — match those directly.
-    // Each entry is OR-ed within itself and AND-ed with the others.
-    const tagFilters: string[][] = [];
-    if (intent.category) tagFilters.push([`category:${clean(intent.category)}`, `subcategory:${clean(intent.category)}`]);
-    if (intent.brand) tagFilters.push([`brand:${clean(intent.brand)}`]);
-    if (intent.colour) tagFilters.push([`color:${clean(intent.colour)}`, `colour:${clean(intent.colour)}`]);
-    if (intent.size) tagFilters.push([`size:${clean(intent.size)}`]);
-    if (intent.gender) {
-      const gender = clean(intent.gender);
-      tagFilters.push(gender === 'unisex' ? ['gender:unisex'] : [`gender:${gender}`, 'gender:unisex']);
-    }
-    for (const tags of tagFilters) {
-      and.push({ searchTags: { hasSome: tags } });
-    }
-
-    // Free-text product name — match it against name, model name, and description.
-    // Generic words like "shoes" aren't product names, so skip them rather than filter everything out.
-    if (intent.productName && !clean(intent.productName).includes('shoe')) {
-      and.push({
-        OR: [
-          { name: { contains: intent.productName, mode: 'insensitive' } },
-          { modelName: { contains: intent.productName, mode: 'insensitive' } },
-          { description: { contains: intent.productName, mode: 'insensitive' } },
-        ],
-      });
-    }
-
-    if (intent.minPrice != null || intent.maxPrice != null) {
-      and.push({
-        basePrice: {
-          ...(intent.minPrice != null && { gte: intent.minPrice }),
-          ...(intent.maxPrice != null && { lte: intent.maxPrice }),
-        },
-      });
-    }
-
-    const whereClause = and.length > 0 ? { AND: and } : {};
-
-    try {
-      const products = await this.prisma.product.findMany({
-        where: whereClause,
-        take: 10,
-        include: {
-          variants: {
-            include: {
-              inventory: true
-            }
-          }
-        },
-      });
-
-      return products.map(p => ({
-        id: p.id,
-        name: p.name,
-        brand: p.brand,
-        modelName: p.modelName,
-        gender: p.gender,
-        price: p.basePrice,
-        availableVariants: p.variants.length,
-        image: p.images && p.images.length > 0 ? p.images[0] : null
-      }));
-    } catch (error) {
-      this.logger.error('Error executing product search query', error);
-      throw error;
-    }
+    return emptyResponse(request.page);
   }
+
+  // Several attempts often send the same database filters (only size, colour or price changed).
+  // Remember those results so the database is asked only once per set of filters.
+  private createCandidateLoader(request: SearchRequest) {
+    const cache = new Map<string, Promise<CandidateProduct[]>>();
+
+    return (filters: SearchFilters) => {
+      const key = databaseFiltersKey(filters);
+      if (!cache.has(key)) {
+        cache.set(key, this.repository.findCandidates(filters, request.sort));
+      }
+      return cache.get(key);
+    };
+  }
+
+  private buildResponse(request: SearchRequest, attempt: SearchAttempt, matches: ProductMatch[]): SearchResponse {
+    const sorted = sortMatches(matches, request.sort, attempt.filters);
+    const pageMatches = getPage(sorted, request.page);
+
+    return {
+      totalMatches: sorted.length,
+      page: request.page,
+      hasMore: request.page * PAGE_SIZE < sorted.length,
+      exactMatch: attempt.droppedFilters.length === 0 && !attempt.widenedPrice,
+      droppedFilters: attempt.droppedFilters,
+      widenedPrice: attempt.widenedPrice
+        ? { minPrice: attempt.filters.minPrice, maxPrice: attempt.filters.maxPrice }
+        : null,
+      products: pageMatches.map(toProductResult),
+    };
+  }
+}
+
+function findMatches(candidates: CandidateProduct[], filters: SearchFilters): ProductMatch[] {
+  return candidates.map((product) => matchProduct(product, filters)).filter(Boolean);
+}
+
+function getPage<T>(items: T[], page: number): T[] {
+  const start = (page - 1) * PAGE_SIZE;
+  return items.slice(start, start + PAGE_SIZE);
+}
+
+// Only the filters the database uses (see SearchRepository.buildWhere).
+function databaseFiltersKey({ brand, category, gender, productName }: SearchFilters): string {
+  return JSON.stringify({ brand, category, gender, productName });
+}
+
+function emptyResponse(page: number): SearchResponse {
+  return {
+    totalMatches: 0,
+    page,
+    hasMore: false,
+    exactMatch: false,
+    droppedFilters: [],
+    widenedPrice: null,
+    products: [],
+  };
 }
