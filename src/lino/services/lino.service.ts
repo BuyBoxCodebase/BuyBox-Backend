@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { AiProviderService } from './ai-provider.service';
 import { ToolsService } from './tools.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { buildSemanticContext, evaluateSemanticIntent } from '../search/semantic-intent';
 
 const LINO_BASE_PROMPT = `PERSONALITY & LANGUAGE:
 
@@ -259,9 +260,12 @@ export class LinoService implements OnModuleInit {
     const conversation = await this.getOrCreateConversation(sessionId, message, userId);
     const history = await this.loadHistory(conversation.id);
     const activeFilters = conversation.lastIntent as Record<string, any> | null;
+    const semanticContext = buildSemanticContext(message, activeFilters ?? undefined);
+    const semanticEval = evaluateSemanticIntent(message, semanticContext.intent);
     const systemPrompt = buildSystemPrompt(activeFilters);
 
-    history.push({ role: 'user', content: withActiveFilters(message, activeFilters) });
+    this.logger.log(`Semantic intent for session ${sessionId}: ${JSON.stringify(semanticEval)}`);
+    history.push({ role: 'user', content: `${withActiveFilters(message, activeFilters)}\n\n${semanticContext.prompt}` });
     await this.prisma.linoMessage.create({
       data: { linoConversationId: conversation.id, role: 'user', content: message },
     });
@@ -311,9 +315,12 @@ export class LinoService implements OnModuleInit {
       const conversation = await this.getOrCreateConversation(sessionId, message, userId);
       const history = await this.loadHistory(conversation.id);
       const activeFilters = conversation.lastIntent as Record<string, any> | null;
+      const semanticContext = buildSemanticContext(message, activeFilters ?? undefined);
+      const semanticEval = evaluateSemanticIntent(message, semanticContext.intent);
       const systemPrompt = buildSystemPrompt(activeFilters);
 
-      history.push({ role: 'user', content: withActiveFilters(message, activeFilters) });
+      this.logger.log(`Semantic intent for stream session ${sessionId}: ${JSON.stringify(semanticEval)}`);
+      history.push({ role: 'user', content: `${withActiveFilters(message, activeFilters)}\n\n${semanticContext.prompt}` });
       await this.prisma.linoMessage.create({
         data: { linoConversationId: conversation.id, role: 'user', content: message },
       });

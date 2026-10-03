@@ -23,6 +23,11 @@ export interface SearchFilters {
   maxPrice?: number;
   occasion?: string;
   keywords?: string[]; // features to look for in the description, e.g. "waterproof"
+  cushionLevel?: 'maximum' | 'balanced' | 'responsive';
+  supportType?: 'stability' | 'neutral';
+  soleType?: 'flat_stiff' | 'flexible' | 'rocker';
+  heelToToeDrop?: 'high' | 'low' | 'zero';
+  upperMaterial?: 'mesh' | 'waterproof' | 'knit' | 'leather';
 }
 
 export type FilterName = keyof SearchFilters;
