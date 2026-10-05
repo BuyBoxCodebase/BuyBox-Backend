@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { AiProviderService } from './ai-provider.service';
 import { ToolsService } from './tools.service';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -220,6 +220,10 @@ function extractProductsFromMessages(responseMessages: any[]): any[] {
   return [];
 }
 
+function canAccessConversation(ownerId: string | null, userId?: string): boolean {
+  return !ownerId || ownerId === userId;
+}
+
 @Injectable()
 export class LinoService implements OnModuleInit {
   private readonly logger = new Logger(LinoService.name);
@@ -236,13 +240,14 @@ export class LinoService implements OnModuleInit {
   }
 
   private async getOrCreateConversation(sessionId: string, initialMessage: string, userId?: string) {
-    let conversation = await this.prisma.linoConversation.findUnique({ where: { sessionId } });
-    if (!conversation) {
-      conversation = await this.prisma.linoConversation.create({
-        data: { sessionId, userId: userId ?? null, title: initialMessage.slice(0, 60) },
-      });
+    const existing = await this.prisma.linoConversation.findUnique({ where: { sessionId } });
+    if (existing) {
+      if (!canAccessConversation(existing.userId, userId)) throw new NotFoundException('Conversation not found');
+      return existing;
     }
-    return conversation;
+    return this.prisma.linoConversation.create({
+      data: { sessionId, userId: userId ?? null, title: initialMessage.slice(0, 60) },
+    });
   }
 
   private async loadHistory(conversationId: string) {
@@ -391,6 +396,15 @@ export class LinoService implements OnModuleInit {
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  // Only the owner can read a chat back. Guest chats have no owner, so they always come back as not found.
+  async getConversationForUser(sessionId: string, userId: string) {
+    const conversation = await this.getConversationDetails(sessionId);
+    if (!conversation || conversation.userId !== userId) {
+      throw new NotFoundException('Conversation not found');
+    }
+    return conversation;
   }
 
   async getConversationDetails(sessionId: string) {
