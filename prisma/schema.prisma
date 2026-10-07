@@ -707,3 +707,65 @@ model LinoMessage {
 
   createdAt          DateTime         @default(now())
 }
+
+enum ActivityEventType {
+  PAGE_VIEW
+  CLICK
+  SEARCH
+  ADD_TO_CART
+  CHECKOUT_STARTED
+  ORDER_PLACED
+  LOGIN
+  LOGOUT
+}
+
+model AnalyticsSession {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  sessionId   String    @unique                // client-generated UUID, rotates after 3 days idle
+  visitorId   String                           // client-generated UUID, persists across sessions
+  customerId  String?   @db.ObjectId
+  startedAt   DateTime
+  lastSeenAt  DateTime
+  durationSec Int       @default(0)
+  entryPath   String?
+  exitPath    String?
+  entryRoute  String?                          // entry/exit path with ids collapsed, e.g. /product/:id
+  exitRoute   String?
+  referrer    String?
+  device      String?
+  platform    String?
+  browser     String?
+  pageCount   Int       @default(0)
+  eventCount  Int       @default(0)
+  converted   Boolean   @default(false)
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([customerId, startedAt])
+  @@index([startedAt])
+  @@index([visitorId])
+}
+
+model ActivityEvent {
+  id         String            @id @default(auto()) @map("_id") @db.ObjectId
+  sessionId  String
+  visitorId  String
+  customerId String?           @db.ObjectId
+  seq        Int                                // client-side order within the session
+  type       ActivityEventType
+  path       String
+  route      String?                            // path with ids collapsed, e.g. /product/:id
+  pageTitle  String?
+  label      String?                            // button/link text or data-track value
+  productId  String?           @db.ObjectId
+  metadata   Json?
+  occurredAt DateTime                           // client time, clamped to server time
+
+  createdAt  DateTime          @default(now())
+
+  @@index([sessionId, occurredAt])
+  @@index([customerId, createdAt])
+  @@index([visitorId])
+  @@index([type, occurredAt])
+}

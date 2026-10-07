@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { CreateOrderDto } from './dto/create-order.dto';
 import { PrismaService } from '../prisma/prisma.service';
 import { MailerService } from '../../src/mailer/mailer.service';
+import { ActivityService } from '../analytics/activity/activity.service';
 import { OrderStatus, UserEventType } from '@prisma/client';
 
 @Injectable()
@@ -9,6 +10,7 @@ export class OrderService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly mailerService: MailerService,
+    private readonly activityService: ActivityService,
   ) { }
 
   async createOrder(userId: string, createOrderDto: CreateOrderDto) {
@@ -225,6 +227,10 @@ export class OrderService {
         timeout: 10000,
       }
     );
+
+    this.activityService
+      .recordOrderPlaced(userId, order.id, order.totalAmount)
+      .catch(err => console.error('[ACTIVITY] Failed to record ORDER_PLACED', err));
 
     // Group products by seller for notifications
     try {
