@@ -711,6 +711,7 @@ model LinoMessage {
 enum ActivityEventType {
   PAGE_VIEW
   CLICK
+  INPUT
   SEARCH
   ADD_TO_CART
   CHECKOUT_STARTED

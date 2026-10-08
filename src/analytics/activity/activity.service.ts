@@ -14,6 +14,7 @@ const OBJECT_ID_RE = /^[0-9a-f]{24}$/i;
 const CLIENT_EVENT_TYPES = new Set<ActivityEventType>([
   ActivityEventType.PAGE_VIEW,
   ActivityEventType.CLICK,
+  ActivityEventType.INPUT,
   ActivityEventType.SEARCH,
   ActivityEventType.ADD_TO_CART,
   ActivityEventType.CHECKOUT_STARTED,
