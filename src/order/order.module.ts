@@ -4,12 +4,14 @@ import { OrderController } from './order.controller';
 import { PrismaModule } from '../../src/prisma/prisma.module';
 import { MailerModule } from '../../src/mailer/mailer.module';
 import { ActivityModule } from '../analytics/activity/activity.module';
+import { WhatsAppModule } from '../whatsapp/whatsapp.module';
 
 @Module({
   imports: [
     PrismaModule,
     MailerModule,
     ActivityModule,
+    WhatsAppModule,
   ],
   controllers: [OrderController],
   providers: [OrderService],

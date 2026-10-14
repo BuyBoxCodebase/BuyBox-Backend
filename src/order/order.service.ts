@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { MailerService } from '../../src/mailer/mailer.service';
 import { ActivityService } from '../analytics/activity/activity.service';
 import { OrderStatus, UserEventType } from '@prisma/client';
+import { SellerOrderNotifier } from '../whatsapp/seller-order-notifier.service';
 
 @Injectable()
 export class OrderService {
@@ -11,6 +12,7 @@ export class OrderService {
     private readonly prisma: PrismaService,
     private readonly mailerService: MailerService,
     private readonly activityService: ActivityService,
+    private readonly sellerOrderNotifier: SellerOrderNotifier,
   ) { }
 
   async createOrder(userId: string, createOrderDto: CreateOrderDto) {
@@ -227,6 +229,8 @@ export class OrderService {
         timeout: 10000,
       }
     );
+
+    this.sellerOrderNotifier.notifySellers(order.id);
 
     this.activityService
       .recordOrderPlaced(userId, order.id, order.totalAmount)

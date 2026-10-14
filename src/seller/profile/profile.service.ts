@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { PrismaService } from 'src/prisma/prisma.service';
+import { normalizePhone } from 'src/whatsapp/whatsapp-format';
 
 @Injectable()
 export class SellerProfileService {
@@ -61,7 +62,10 @@ export class SellerProfileService {
         description: string;
         brandPic?: string;
         location: string;
+        phoneNumber?: string;
     }) {
+        const phoneNumber = this.parsePhoneNumber(data.phoneNumber);
+
         const existingSeller = await this.prisma.seller.findUnique({
             where: { id: userId }
         });
@@ -81,6 +85,7 @@ export class SellerProfileService {
                 description: data.description,
                 brandPic: data.brandPic,
                 location: data.location,
+                ...(phoneNumber && { phoneNumber }),
                 isCompleted: true,
             }
         });
@@ -105,6 +110,7 @@ export class SellerProfileService {
                 description: true,
                 brandPic: true,
                 location: true,
+                phoneNumber: true,
             }
         });
 
@@ -127,11 +133,15 @@ export class SellerProfileService {
         description?: string;
         brandPic?: string;
         location?: string;
+        phoneNumber?: string;
     }) {
+        const phoneNumber = this.parsePhoneNumber(data.phoneNumber);
+
         const updatedSeller = await this.prisma.seller.update({
             where: { id: userId },
             data: {
                 ...(data.name && { name: data.name }),
+                ...(phoneNumber && { phoneNumber }),
                 ...(data.description !== undefined && { description: data.description }),
                 ...(data.brandPic !== undefined && { brandPic: data.brandPic }),
                 ...(data.location !== undefined && { location: data.location }),
@@ -160,5 +170,16 @@ export class SellerProfileService {
             success: true,
             message: 'Profile reset successfully',
         };
+    }
+
+    // The seller's WhatsApp number, where new-order messages are sent. Stored as typed;
+    // the WhatsApp sender normalises it. Blank means "leave unchanged".
+    private parsePhoneNumber(value?: string): string | undefined {
+        const phoneNumber = value?.trim();
+        if (!phoneNumber) return undefined;
+        if (!normalizePhone(phoneNumber, '')) {
+            throw new BadRequestException('Please enter a valid WhatsApp number, including the country code.');
+        }
+        return phoneNumber;
     }
 }

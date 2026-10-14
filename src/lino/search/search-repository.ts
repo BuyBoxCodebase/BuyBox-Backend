@@ -101,18 +101,21 @@ function toCandidateVariant(row: VariantRow): CandidateVariant {
   };
 }
 
-function findOptionValue(row: VariantRow, isWantedOption: (optionName: string) => boolean): string | null {
+export function findOptionValue(
+  row: { options: { optionValue: { value: string; option: { name: string } } }[] },
+  isWantedOption: (optionName: string) => boolean,
+): string | null {
   const match = row.options.find((link) => isWantedOption(link.optionValue.option.name));
   return match?.optionValue.value ?? null;
 }
 
 // "Size", "Shoe Size" and "US Size" all count as size.
-function isSizeOption(optionName: string): boolean {
+export function isSizeOption(optionName: string): boolean {
   return optionName.toLowerCase().includes('size');
 }
 
 // "Colour" and "Color" both count as colour.
-function isColourOption(optionName: string): boolean {
+export function isColourOption(optionName: string): boolean {
   const name = optionName.toLowerCase();
   return name.includes('colour') || name.includes('color');
 }
