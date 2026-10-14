@@ -1,9 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppCloudClient } from './whatsapp-cloud.client';
-import { WhatsAppConfig } from './whatsapp.config';
+import { FEATURE_FLAGS } from '../feature-flags';
 import { findOptionValue, isColourOption, isSizeOption } from '../lino/search/search-repository';
 import { normalizePhone, orderReference, templateText } from './whatsapp-format';
+
+const ORDER_TEMPLATE_NAME = 'treides_seller_new_order_v2';
+const DEFAULT_COUNTRY_CODE = '263';
 
 /** Sends the seller one WhatsApp message per item in a new order. */
 @Injectable()
@@ -12,13 +15,12 @@ export class SellerOrderNotifier {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly config: WhatsAppConfig,
     private readonly whatsapp: WhatsAppCloudClient,
   ) {}
 
   /** Never throws: a failed WhatsApp message must not affect the order. */
   async notifySellers(orderId: string): Promise<void> {
-    if (!this.config.enabled || !this.config.accessToken || !this.config.phoneNumberId) return;
+    if (!FEATURE_FLAGS.whatsappSellerNotifications) return;
     try {
       const items = await this.prisma.orderProduct.findMany({
         where: { orderId },
@@ -53,7 +55,7 @@ export class SellerOrderNotifier {
           const seller = item.product.seller;
           const phone = normalizePhone(
             seller.notificationPrefs?.whatsappNumber || seller.phoneNumber,
-            this.config.defaultCountryCode,
+            DEFAULT_COUNTRY_CODE,
           );
           if (!phone) {
             this.logger.warn(`Seller ${seller.id} has no valid WhatsApp number; not notified about order ${orderId}`);
@@ -79,7 +81,7 @@ export class SellerOrderNotifier {
           const buttonParams = [orderId, orderId];
 
           try {
-            const messageId = await this.whatsapp.sendTemplate(phone, this.config.orderTemplateName, params, buttonParams);
+            const messageId = await this.whatsapp.sendTemplate(phone, ORDER_TEMPLATE_NAME, params, buttonParams);
             this.logger.log(`Seller ${seller.id} notified about order ${orderId} item ${item.id} (wamid ${messageId})`);
           } catch (error) {
             this.logger.error(
