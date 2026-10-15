@@ -1,23 +1,26 @@
 import { Injectable } from '@nestjs/common';
-import { WhatsAppConfig } from './whatsapp.config';
 
+const API_VERSION = 'v25.0';
+const PHONE_NUMBER_ID = '1329759886895150';
+const TEMPLATE_LANGUAGE = 'en';
 const REQUEST_TIMEOUT_MS = 10_000;
 
 /** Thin wrapper over the WhatsApp Cloud API messages endpoint. */
 @Injectable()
 export class WhatsAppCloudClient {
-  constructor(private readonly config: WhatsAppConfig) {}
-
   /**
    * Sends an approved template. Returns Meta's message id (wamid).
    * `urlButtonParams` fills the {{1}} at the end of each dynamic URL button, in button order.
    */
   async sendTemplate(to: string, templateName: string, bodyParams: string[], urlButtonParams: string[] = []): Promise<string> {
-    const url = `https://graph.facebook.com/${this.config.apiVersion}/${this.config.phoneNumberId}/messages`;
+    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN?.trim();
+    if (!accessToken) throw new Error('WHATSAPP_ACCESS_TOKEN is not set');
+
+    const url = `https://graph.facebook.com/${API_VERSION}/${PHONE_NUMBER_ID}/messages`;
     const response = await fetch(url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${this.config.accessToken}`,
+        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -26,7 +29,7 @@ export class WhatsAppCloudClient {
         type: 'template',
         template: {
           name: templateName,
-          language: { code: this.config.templateLanguage },
+          language: { code: TEMPLATE_LANGUAGE },
           components: [
             { type: 'body', parameters: bodyParams.map((text) => ({ type: 'text', text })) },
             ...urlButtonParams.map((text, index) => ({
