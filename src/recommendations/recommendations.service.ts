@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { IN_STOCK_PRODUCT_WHERE } from '../product/utils/in-stock.util';
 import { ProductScoreDto } from './dto';
 
 export interface ScoringWeights {
@@ -158,8 +159,9 @@ export class RecommendationsService {
         right.score - left.score || left.productId.localeCompare(right.productId),
     );
 
+    // Out-of-stock products aren't looked up here, so the loop below skips them
     const products = await this.db.product.findMany({
-      where: { id: { in: uniqueIds } },
+      where: { id: { in: uniqueIds }, ...IN_STOCK_PRODUCT_WHERE },
       select: { id: true, sellerId: true },
     });
     const brandByProductId = new Map<string, string>(

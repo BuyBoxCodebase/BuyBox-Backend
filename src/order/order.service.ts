@@ -5,6 +5,7 @@ import { MailerService } from '../../src/mailer/mailer.service';
 import { ActivityService } from '../analytics/activity/activity.service';
 import { OrderStatus, UserEventType } from '@prisma/client';
 import { SellerOrderNotifier } from '../whatsapp/seller-order-notifier.service';
+import { revalidateFrontendCache, FrontendApp, CacheTag } from '../../libs/common/src';
 
 @Injectable()
 export class OrderService {
@@ -304,6 +305,9 @@ export class OrderService {
       console.error("[EMAIL_ERROR] Error constructing email notifications", err);
     }
 
+    // Stock went down — products that just sold out must drop off the cached listings
+    revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+
     return order;
   }
 
@@ -549,7 +553,7 @@ export class OrderService {
       );
     }
 
-    return await this.prisma.$transaction(async (prisma) => {
+    const result = await this.prisma.$transaction(async (prisma) => {
       // Scoped to this seller's brand, so one seller cannot act on another's order.
       const order = await prisma.order.findFirst({
         where: {
@@ -608,11 +612,17 @@ export class OrderService {
         order: updatedOrder
       };
     });
+
+    // Rejected orders put stock back, so restocked products reappear in the cached listings
+    if (status === OrderStatus.OUT_OF_STOCK) {
+      revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+    }
+    return result;
   }
 
   async cancelOrder(userId: string, orderId: string) {
     // Implementation for canceling an order
-    return await this.prisma.$transaction(async (prisma) => {
+    const result = await this.prisma.$transaction(async (prisma) => {
       // Find the order
       const order = await prisma.order.findUnique({
         where: {
@@ -686,6 +696,10 @@ export class OrderService {
         order: updatedOrder
       };
     });
+
+    // Cancelled items go back into stock, so restocked products reappear in the cached listings
+    revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+    return result;
   }
 
   async getDueOrders() {

@@ -1,5 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { revalidateFrontendCache, FrontendApp, CacheTag } from '../../libs/common/src';
 
 @Injectable()
 export class InventoryService {
@@ -84,6 +85,9 @@ export class InventoryService {
                     },
                 });
             }
+
+            // Products going in/out of stock must be reflected in the cached customer listings
+            revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
 
             return {
                 success: true,
@@ -302,6 +306,8 @@ export class InventoryService {
                     }
                 })
             );
+
+            revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
 
             return {
                 success: true,

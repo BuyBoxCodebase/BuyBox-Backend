@@ -8,6 +8,7 @@ import { CreateVariantDto } from './dto/create-variant.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
 import { revalidateFrontendCache, FrontendApp, CacheTag } from '../../libs/common/src';
 import { generateSearchTags } from './utils/search-tags.util';
+import { IN_STOCK_PRODUCT_WHERE } from './utils/in-stock.util';
 
 function assertValidDescription(description: string | undefined) {
   if (!description || description.trim().length < MIN_DESCRIPTION_LENGTH) {
@@ -60,6 +61,31 @@ function sanitizeAttributes(attributes: ProductAttributesDto | null | undefined)
   }
 
   return Object.keys(result).length > 0 ? result : null;
+}
+
+type InventoryRow = { quantity: number };
+type PopularProductRow = {
+  basePrice: number;
+  inventory: InventoryRow[];
+  variants: { price: number; inventory: InventoryRow[] }[];
+};
+
+// Shapes a product for the popular / trending carousels the same way get-by-subcategory does:
+// `inventory` is a single { quantity } (default variant's stock, else the product's own), which is
+// what the frontend's ProductCard / AddToCartButton read. Expects `variants` filtered to the default one.
+function toPopularListingProduct<T extends PopularProductRow>(product: T) {
+  const defaultVariant = product.variants[0] || null;
+  const quantity = defaultVariant?.inventory && defaultVariant.inventory.length > 0
+    ? defaultVariant.inventory[0].quantity
+    : (product.inventory && product.inventory.length > 0 ? product.inventory[0].quantity : 0);
+
+  return {
+    ...product,
+    price: defaultVariant?.price || product.basePrice,
+    inventory: { quantity },
+    defaultVariant,
+    variants: undefined
+  };
 }
 
 @Injectable()
@@ -613,7 +639,7 @@ export class ProductService {
   async getProducts({ categoryId }: { categoryId?: string }) {
     try {
       const products = await this.prisma.product.findMany({
-        where: categoryId ? { categoryId } : {},
+        where: categoryId ? { AND: [{ categoryId }, IN_STOCK_PRODUCT_WHERE] } : IN_STOCK_PRODUCT_WHERE,
         include: {
           category: true,
           subCategory: true,
@@ -714,7 +740,8 @@ export class ProductService {
           categoryId,
           subCategory: {
             name: subCategoryName,
-          }
+          },
+          ...IN_STOCK_PRODUCT_WHERE,
         },
         include: {
           category: true,
@@ -1424,17 +1451,18 @@ export class ProductService {
       whereClause.categoryId = categoryId;
     }
 
+    // Over-fetch so out-of-stock products dropped below can be backfilled by lower-ranked ones
     const snapshots = await this.prisma.popularProductSnapshot.findMany({
       where: whereClause,
       orderBy: [
         { rank: 'asc' },
         { unitsSold: 'desc' }
       ],
-      take: limit,
+      take: limit * 3,
     });
 
     const products = await this.prisma.product.findMany({
-      where: { id: { in: snapshots.map((s) => s.productId) } },
+      where: { id: { in: snapshots.map((s) => s.productId) }, ...IN_STOCK_PRODUCT_WHERE },
       include: {
         category: true,
         subCategory: true,
@@ -1448,20 +1476,14 @@ export class ProductService {
       }
     });
 
-    const mappedProducts = products.map(product => {
-      const defaultVariant = product.variants[0] || null;
-      return {
-        ...product,
-        price: defaultVariant?.price || product.basePrice,
-        inventory: defaultVariant?.inventory || (product.inventory && product.inventory.length > 0 ? product.inventory[0] : null),
-        defaultVariant,
-        variants: undefined
-      };
-    });
+    const mappedProducts = products.map(toPopularListingProduct);
 
     const byId = new Map(mappedProducts.map((p) => [p.id, p]));
 
-    return snapshots.map((s) => ({ ...s, product: byId.get(s.productId) }));
+    return snapshots
+      .filter((s) => byId.has(s.productId))
+      .slice(0, limit)
+      .map((s) => ({ ...s, product: byId.get(s.productId) }));
   }
 
   async getTrendingProducts(limit = 20, skip = 0) {
@@ -1478,7 +1500,7 @@ export class ProductService {
     if (productIds.length === 0) return [];
 
     const products = await this.prisma.product.findMany({
-      where: { id: { in: productIds } },
+      where: { id: { in: productIds }, ...IN_STOCK_PRODUCT_WHERE },
       include: {
         category: true,
         subCategory: true,
@@ -1491,7 +1513,7 @@ export class ProductService {
     });
 
     // Preserve the recency order from orderItems
-    const byId = new Map(products.map((p) => [p.id, p]));
+    const byId = new Map(products.map((p) => [p.id, toPopularListingProduct(p)]));
     // Wrap in { product } to match the snapshot envelope the frontend expects
     return productIds.map((id) => ({ product: byId.get(id) })).filter((s) => s.product);
   }
