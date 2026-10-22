@@ -317,7 +317,6 @@ model DeliveryConfig {
   id                String   @id @default(auto()) @map("_id") @db.ObjectId
   transferFees      Json
   distanceBands     Json
-  distanceBands     Json
   beyondLastBandFee Float
 
   updatedAt DateTime @updatedAt
