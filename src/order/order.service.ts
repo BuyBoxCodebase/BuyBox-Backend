@@ -6,6 +6,7 @@ import { ActivityService } from '../analytics/activity/activity.service';
 import { OrderStatus, UserEventType } from '@prisma/client';
 import { SellerOrderNotifier } from '../whatsapp/seller-order-notifier.service';
 import { revalidateFrontendCache, FrontendApp, CacheTag } from '../../libs/common/src';
+import { DeliveryPricingService } from '../delivery-pricing/delivery-pricing.service';
 
 @Injectable()
 export class OrderService {
@@ -14,10 +15,12 @@ export class OrderService {
     private readonly mailerService: MailerService,
     private readonly activityService: ActivityService,
     private readonly sellerOrderNotifier: SellerOrderNotifier,
+    private readonly deliveryPricingService: DeliveryPricingService,
   ) { }
 
   async createOrder(userId: string, createOrderDto: CreateOrderDto) {
-    const { email, address, phoneNumber, paymentMode, products, cartId, fulfillmentType, pickupLocationId, pickupDate, pickupFee } = createOrderDto;
+    const { email, address, phoneNumber, paymentMode, products, cartId, fulfillmentType, pickupLocationId, pickupDate, deliveryCoordinates } = createOrderDto;
+    const method = fulfillmentType || 'DELIVERY';
 
     const order = await this.prisma.$transaction(
       async (prisma) => {
@@ -42,9 +45,6 @@ export class OrderService {
           }
 
           totalAmount = cart.products.reduce((sum, item) => sum + item.totalPrice, 0);
-          if (pickupFee) {
-            totalAmount += pickupFee;
-          }
 
           // Process each cart item based on whether it has a variant or not
           for (const item of cart.products) {
@@ -181,9 +181,6 @@ export class OrderService {
 
           const itemTotalPrice = itemPrice * quantity;
           totalAmount = itemTotalPrice;
-          if (pickupFee) {
-            totalAmount += pickupFee;
-          }
 
           orderProductsData.push({
             productId: productId,
@@ -195,6 +192,15 @@ export class OrderService {
           throw new Error("Either cartId or products must be provided");
         }
 
+        // Delivery fees are always recalculated here; any amount the client shows is display-only
+        const quote = await this.deliveryPricingService.quote({
+          productIds: orderProductsData.map((item) => item.productId),
+          method,
+          hubId: pickupLocationId,
+          customerCoordinates: deliveryCoordinates,
+        });
+        totalAmount += quote.totalFee;
+
         const order = await prisma.order.create({
           data: {
             userId,
@@ -203,13 +209,21 @@ export class OrderService {
             address,
             totalAmount,
             paymentMode,
-            fulfillmentType: fulfillmentType || 'DELIVERY',
-            pickupLocationId,
+            fulfillmentType: method,
+            pickupLocationId: quote.hubId,
             pickupDate: pickupDate ? new Date(pickupDate) : undefined,
-            pickupFee,
+            transferFee: quote.transferFee,
+            transferLegs: quote.transferLegs.map((leg) => ({ originHubId: leg.originHubId, fee: leg.fee })),
+            handlingFee: quote.handlingFee,
+            deliveryFee: quote.deliveryFee,
+            deliveryDistanceKm: quote.deliveryDistanceKm,
+            deliveryCoordinates: method === 'DELIVERY'
+              ? { latitude: deliveryCoordinates.latitude, longitude: deliveryCoordinates.longitude }
+              : undefined,
             products: { create: orderProductsData },
           },
           include: {
+            pickupLocation: { select: { name: true } },
             products: {
               include: {
                 product: {
@@ -261,7 +275,8 @@ export class OrderService {
         }
       }
 
-      const shippingMethod = order.fulfillmentType === "PICKUP" ? "Pickup in Harare" : "Delivery";
+      const hubName = order.pickupLocation?.name ?? "Treides hub";
+      const shippingMethod = order.fulfillmentType === "PICKUP" ? `Pickup at ${hubName}` : `Home delivery from ${hubName}`;
       const orderDate = order.createdAt.toLocaleDateString();
       const customerName = order.user?.name || "Customer";
 
@@ -335,6 +350,10 @@ export class OrderService {
         pickupLocation: true,
         pickupDate: true,
         pickupFee: true,
+        transferFee: true,
+        handlingFee: true,
+        deliveryFee: true,
+        deliveryDistanceKm: true,
         createdAt: true,
       }
     });

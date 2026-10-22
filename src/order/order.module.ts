@@ -5,6 +5,7 @@ import { PrismaModule } from '../../src/prisma/prisma.module';
 import { MailerModule } from '../../src/mailer/mailer.module';
 import { ActivityModule } from '../analytics/activity/activity.module';
 import { WhatsAppModule } from '../whatsapp/whatsapp.module';
+import { DeliveryPricingModule } from '../delivery-pricing/delivery-pricing.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { WhatsAppModule } from '../whatsapp/whatsapp.module';
     MailerModule,
     ActivityModule,
     WhatsAppModule,
+    DeliveryPricingModule,
   ],
   controllers: [OrderController],
   providers: [OrderService],

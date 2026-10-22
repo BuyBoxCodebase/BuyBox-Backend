@@ -5,6 +5,11 @@ import { LocationService } from './location.service';
 export class LocationController {
   constructor(private readonly locationService: LocationService) {}
 
+  @Get()
+  findAll() {
+    return this.locationService.findAll();
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.locationService.findOne(id);

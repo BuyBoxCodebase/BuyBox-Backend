@@ -2,6 +2,8 @@ import { BadRequestException, Injectable } from '@nestjs/common';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { normalizePhone } from 'src/whatsapp/whatsapp-format';
+import { isValidCoordinates } from 'src/delivery-pricing/pricing';
+import { Coordinates } from 'src/delivery-pricing/delivery-pricing.types';
 
 @Injectable()
 export class SellerProfileService {
@@ -61,10 +63,11 @@ export class SellerProfileService {
         name: string;
         description: string;
         brandPic?: string;
-        location: string;
+        coordinates?: Coordinates;
         phoneNumber?: string;
     }) {
         const phoneNumber = this.parsePhoneNumber(data.phoneNumber);
+        const coordinates = this.parseCoordinates(data.coordinates);
 
         const existingSeller = await this.prisma.seller.findUnique({
             where: { id: userId }
@@ -84,7 +87,7 @@ export class SellerProfileService {
                 name: data.name,
                 description: data.description,
                 brandPic: data.brandPic,
-                location: data.location,
+                ...(coordinates && { coordinates }),
                 ...(phoneNumber && { phoneNumber }),
                 isCompleted: true,
             }
@@ -109,7 +112,7 @@ export class SellerProfileService {
                 isCompleted: true,
                 description: true,
                 brandPic: true,
-                location: true,
+                coordinates: true,
                 phoneNumber: true,
             }
         });
@@ -132,10 +135,11 @@ export class SellerProfileService {
         name?: string;
         description?: string;
         brandPic?: string;
-        location?: string;
+        coordinates?: Coordinates;
         phoneNumber?: string;
     }) {
         const phoneNumber = this.parsePhoneNumber(data.phoneNumber);
+        const coordinates = this.parseCoordinates(data.coordinates);
 
         const updatedSeller = await this.prisma.seller.update({
             where: { id: userId },
@@ -144,7 +148,7 @@ export class SellerProfileService {
                 ...(phoneNumber && { phoneNumber }),
                 ...(data.description !== undefined && { description: data.description }),
                 ...(data.brandPic !== undefined && { brandPic: data.brandPic }),
-                ...(data.location !== undefined && { location: data.location }),
+                ...(coordinates && { coordinates }),
             }
         });
 
@@ -162,7 +166,7 @@ export class SellerProfileService {
                 isCompleted: false,
                 description: null,
                 brandPic: null,
-                location: null,
+                coordinates: null,
             }
         });
 
@@ -170,6 +174,17 @@ export class SellerProfileService {
             success: true,
             message: 'Profile reset successfully',
         };
+    }
+
+    // The seller's location decides which hub their products ship from, so it must be a real point
+    private parseCoordinates(value?: Coordinates): Coordinates | undefined {
+        if (value === undefined || value === null) {
+            return undefined;
+        }
+        if (!isValidCoordinates(value)) {
+            throw new BadRequestException('Location must have a valid latitude and longitude');
+        }
+        return { latitude: value.latitude, longitude: value.longitude };
     }
 
     // The seller's WhatsApp number, where new-order messages are sent. Stored as typed;

@@ -26,6 +26,7 @@ import { createKeyv } from '@keyv/redis';
 import { LocationModule } from './location/location.module';
 import { CheckoutModule } from './checkout/checkout.module';
 import { LinoModule } from './lino/lino.module';
+import { DeliveryPricingModule } from './delivery-pricing/delivery-pricing.module';
 
 @Module({
   imports: [
@@ -67,6 +68,7 @@ import { LinoModule } from './lino/lino.module';
     LocationModule,
     CheckoutModule,
     LinoModule,
+    DeliveryPricingModule,
   ],
   controllers: [],
   providers: [],
