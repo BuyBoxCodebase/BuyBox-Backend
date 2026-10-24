@@ -7,6 +7,12 @@ class OrderProduct {
     quantity: number;
 }
 
+class DeliveryAddress {
+    address: string;
+    city: string;
+    state?: string;
+}
+
 export class CreateOrderDto {
     email: string;
     phoneNumber: string;
@@ -20,4 +26,6 @@ export class CreateOrderDto {
     pickupDate?: string;
     // Required for home delivery; the fee is calculated from it on the server
     deliveryCoordinates?: Coordinates;
+    // The delivery address as separate fields, saved so the next checkout can prefill it
+    deliveryAddress?: DeliveryAddress;
 }

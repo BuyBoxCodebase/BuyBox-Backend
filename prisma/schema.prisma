@@ -359,19 +359,14 @@ model OrderPreference {
   id             String      @id @default(auto()) @map("_id") @db.ObjectId
   userId         String      @unique @db.ObjectId
   user           Customer    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  name           String
-  email          String?
-  phoneNumber    String?
-  address        String
-  city           String
-  state          String
-  postalCode     String
-  country        String      @default("Zimbabwe")
+  email          String
+  phoneNumber    String
   paymentMode    PaymentMode @default(CASH_ON_DELIVERY)
-  cardNumber     String?
-  cardType       String?
-  cardHolderName String?
-  isDefault      Boolean     @default(false)
+  // Last delivery address; pickup orders leave it unchanged
+  address             String?
+  city                String?
+  state               String?
+  deliveryCoordinates Json?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

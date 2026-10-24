@@ -247,6 +247,10 @@ export class OrderService {
 
     this.sellerOrderNotifier.notifySellers(order.id);
 
+    // Not part of the transaction: a failed save must not fail the order
+    this.saveOrderPreference(userId, createOrderDto)
+      .catch(err => console.error('[ORDER] Failed to save order preference', err));
+
     this.activityService
       .recordOrderPlaced(userId, order.id, order.totalAmount)
       .catch(err => console.error('[ACTIVITY] Failed to record ORDER_PLACED', err));
@@ -324,6 +328,44 @@ export class OrderService {
     revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
 
     return order;
+  }
+
+  // One saved set of checkout details per customer, overwritten on every order
+  private async saveOrderPreference(userId: string, createOrderDto: CreateOrderDto) {
+    const { email, phoneNumber, paymentMode, fulfillmentType, deliveryAddress, deliveryCoordinates } = createOrderDto;
+
+    // Pickup orders keep the previously saved delivery address
+    const addressData = fulfillmentType !== 'PICKUP' && deliveryAddress
+      ? {
+        address: deliveryAddress.address,
+        city: deliveryAddress.city,
+        state: deliveryAddress.state || null,
+        deliveryCoordinates: deliveryCoordinates
+          ? { latitude: deliveryCoordinates.latitude, longitude: deliveryCoordinates.longitude }
+          : undefined,
+      }
+      : {};
+
+    await this.prisma.orderPreference.upsert({
+      where: { userId },
+      create: { userId, email, phoneNumber, paymentMode, ...addressData },
+      update: { email, phoneNumber, paymentMode, ...addressData },
+    });
+  }
+
+  async getOrderPreference(userId: string) {
+    return this.prisma.orderPreference.findUnique({
+      where: { userId },
+      select: {
+        email: true,
+        phoneNumber: true,
+        paymentMode: true,
+        address: true,
+        city: true,
+        state: true,
+        deliveryCoordinates: true,
+      },
+    });
   }
 
   async getOrders(userId: string) {

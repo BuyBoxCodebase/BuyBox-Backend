@@ -66,6 +66,4 @@ export class CustomerProfileService {
             userId: updatedCustomer.id
         }
     }
-
-    async setCustomerOrderPreference() { }
 }

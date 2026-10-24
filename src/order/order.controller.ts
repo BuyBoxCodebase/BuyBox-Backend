@@ -17,6 +17,13 @@ export class OrderController {
     return this.orderService.createOrder(userId, createOrderDto);
   }
 
+  // Details saved from the customer's last checkout, used to prefill the next one
+  @Roles("CUSTOMER")
+  @Get('/order-preference')
+  getOrderPreference(@GetUser("userId") userId: string) {
+    return this.orderService.getOrderPreference(userId);
+  }
+
   @Roles("CUSTOMER")
   @Get('/get-all-orders')
   getAllOrders(@GetUser("userId") userId: string) {
