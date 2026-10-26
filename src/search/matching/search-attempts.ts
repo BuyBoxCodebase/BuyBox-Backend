@@ -1,13 +1,17 @@
-import { FilterName, SearchAttempt, SearchFilters } from './search.types';
+import { FilterName, SearchFilters } from '../search.types';
 
 const PRICE_WIDEN_RATE = 0.2;
 
-// Filters are dropped one by one, in this order, until something is found.
-// Brand is never dropped. Occasion is not here because it only affects ranking, never filtering.
-type LooseningStep =
-  | { kind: 'drop'; filter: FilterName }
-  | { kind: 'widenPrice' }
-  | { kind: 'dropPrice' };
+// One try at the search. Later tries have fewer or looser filters.
+export interface SearchAttempt {
+  filters: SearchFilters;
+  droppedFilters: FilterName[];
+  widenedPrice: boolean;
+}
+
+// Filters are loosened one by one, in this order, until something is found.
+// Brand is never dropped: someone asking for Nike doesn't want Adidas.
+type LooseningStep = { kind: 'drop'; filter: FilterName } | { kind: 'widenPrice' } | { kind: 'dropPrice' };
 
 const LOOSENING_STEPS: LooseningStep[] = [
   { kind: 'drop', filter: 'colour' },
@@ -16,7 +20,6 @@ const LOOSENING_STEPS: LooseningStep[] = [
   { kind: 'dropPrice' },
   { kind: 'drop', filter: 'gender' },
   { kind: 'drop', filter: 'category' },
-  { kind: 'drop', filter: 'productName' },
 ];
 
 // Returns the exact search first, then each looser version that actually changes something.
@@ -24,8 +27,7 @@ export function buildSearchAttempts(filters: SearchFilters): SearchAttempt[] {
   const attempts: SearchAttempt[] = [{ filters, droppedFilters: [], widenedPrice: false }];
 
   for (const step of LOOSENING_STEPS) {
-    const previous = attempts[attempts.length - 1];
-    const next = applyStep(previous, step);
+    const next = applyStep(attempts[attempts.length - 1], step);
     if (next) attempts.push(next);
   }
 

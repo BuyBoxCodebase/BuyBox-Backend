@@ -3,22 +3,20 @@ import { ConfigModule } from '@nestjs/config';
 import { LinoController } from './lino.controller';
 import { LinoService } from './services/lino.service';
 import { AiProviderService } from './services/ai-provider.service';
-import { SearchService } from './services/search.service';
 import { ToolsService } from './services/tools.service';
-import { SearchRepository } from './search/search-repository';
 import { PrismaModule } from '../prisma/prisma.module';
+import { SearchModule } from '../search/search.module';
 
 @Module({
   imports: [
     PrismaModule,
     ConfigModule,
+    SearchModule,
   ],
   controllers: [LinoController],
   providers: [
     LinoService,
     AiProviderService,
-    SearchService,
-    SearchRepository,
     ToolsService,
   ],
 })

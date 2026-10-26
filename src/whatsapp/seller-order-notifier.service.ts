@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppCloudClient } from './whatsapp-cloud.client';
 import { FEATURE_FLAGS } from '../feature-flags';
-import { findOptionValue, isColourOption, isSizeOption } from '../lino/search/search-repository';
+import { findOptionValue, isColourOption, isSizeOption } from '../product/utils/variant-options.util';
 import { normalizePhone, orderReference, templateText } from './whatsapp-format';
 
 const ORDER_TEMPLATE_NAME = 'treides_seller_new_order_v2';

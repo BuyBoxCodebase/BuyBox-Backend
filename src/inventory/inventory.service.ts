@@ -1,11 +1,13 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { revalidateFrontendCache, FrontendApp, CacheTag } from '../../libs/common/src';
+import { SearchIndexer } from '../search/index/search-indexer.service';
 
 @Injectable()
 export class InventoryService {
     constructor(
-        private readonly prisma: PrismaService
+        private readonly prisma: PrismaService,
+        private readonly searchIndexer: SearchIndexer
     ) { }
 
     // Update to handle variant inventory
@@ -86,7 +88,8 @@ export class InventoryService {
                 });
             }
 
-            // Products going in/out of stock must be reflected in the cached customer listings
+            // Products going in/out of stock must be reflected in the cached customer listings and in search
+            await this.searchIndexer.reindexProduct(variant.productId);
             revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
 
             return {
@@ -307,6 +310,9 @@ export class InventoryService {
                 })
             );
 
+            for (const productId of new Set(variants.map(v => v.product.id))) {
+                await this.searchIndexer.reindexProduct(productId);
+            }
             revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
 
             return {

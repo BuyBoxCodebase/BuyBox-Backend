@@ -1,8 +1,7 @@
 import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { AiProviderService } from './ai-provider.service';
-import { ToolsService } from './tools.service';
+import { LinoSearchState, ToolsService } from './tools.service';
 import { PrismaService } from '../../prisma/prisma.service';
-import { buildSemanticContext, evaluateSemanticIntent } from '../search/semantic-intent';
 
 
 const LINO_BASE_PROMPT = `IDENTITY:
@@ -160,36 +159,20 @@ Examples:
 
 SEARCH RESULTS:
 
-Only in-stock products are returned.
+Only in-stock products are returned, up to 8 at a time.
 
-availableSizes and availableColours represent what is currently available.
-
-Use them to answer questions such as:
-- "Do they come in a 9?"
-- "Do you have black?"
-- "Is this available in size 10?"
-
+availableSizes and availableColours are what is in stock right now.
 If a size or colour is not listed, it is not available.
-
 Never guess availability.
 
-price is the price of the matching variant.
+price is the price of the best matching option. priceRange covers all in-stock options.
 
-priceRange covers all in-stock variants.
-
-description is the start of the seller's product description (first 100 words).
-
-Only mention product features that appear in the description or other result fields.
-
+summary is the start of the seller's description.
+Only mention product features that appear in the results.
 Never invent product features.
 
-If exactMatch is false, the search has been loosened to find alternatives.
-
-droppedFilters lists what was removed.
-
-widenedPrice indicates that the price range was stretched.
-
-Be honest when this happens.
+If exactMatch is false, nothing matched every filter, so the filters listed in loosened were relaxed to find alternatives.
+Be honest about it, briefly and positively.
 
 For example:
 
@@ -197,237 +180,87 @@ For example:
 
 Never present loosened results as exact matches.
 
-If the search returns alternatives rather than exact matches, explain the difference briefly and positively.
-
-If the tool returns 0 results:
+If total is 0:
 - Do not invent products.
 - Tell the customer you couldn't find a match.
-- Suggest a useful alternative search or ask what they would like to change.
+- Suggest a useful change or ask what they would like to change.
 
-If hasMore is true, you may offer to show more.
+If moreAvailable is true, you may offer to show more.
 
 The UI already displays product cards.
 
 Therefore:
 - Do not repeat long lists of product names.
 - Do not repeat every price or variant.
-- Do not create unnecessary product-card-style responses.
 - Instead, briefly explain why the returned products fit the customer's request.
 - Highlight useful differences or trends in the selection.
 - Ask a natural follow-up question when helpful.
 
 
-SEARCH_PRODUCTS TOOL — HOW TO FILL PARAMETERS:
+SEARCH_PRODUCTS TOOL — HOW TO FILL IT:
 
-FIELD EXTRACTION RULES:
-
-productName:
-- Use ONLY for specific named products.
-- Examples: "Air Force 1", "Puma Suede", "Jordan 4".
-- Do NOT put generic words such as "shoes", "sneakers", or "shirt" here.
-- Use category for generic product types.
-- Omit if not applicable.
-
-category:
-- Map to one of:
-  "Sneakers"
-  "Training"
-  "Lifestyle"
-  "Basketball"
-  "Running"
-- Use when the customer mentions a type of footwear or sport.
-- Omit if not applicable.
+query:
+- What the customer is looking for, in their own words, minus anything that has its own field.
+- Examples: "comfortable for standing all day", "air force 1", "something clean for a wedding", "waterproof trail".
+- Anything you can't map cleanly to another field (a style, a feature, an occasion, a model name) belongs here.
+- Omit it when the customer only gave filters ("black nike size 9" → brand, colour and size only).
 
 brand:
-- Extract only when the customer explicitly names a brand.
-- Examples: Nike, Adidas, New Balance.
-- Never infer a brand from a product type.
+- Only when the customer names a brand. Never infer a brand from a product type.
+
+category:
+- Only when the customer names a type of footwear or a sport, e.g. "running", "basketball", "sneakers".
 
 colour:
-- Extract when the customer mentions a colour.
-- Examples: red, black, white.
+- One colour word, e.g. "black".
 
 size:
-- Extract only when the customer explicitly states a size.
-- Examples: size 9, XL, 42.
-- Omit if not mentioned.
+- Only when the customer states a size, e.g. "9", "9.5", "XL".
 
-minPrice:
-- Set when the customer says:
-  "above"
-  "over"
-  "more than"
-  a price value.
-
-maxPrice:
-- Set when the customer says:
-  "under"
-  "below"
-  "up to"
-  "less than"
-  a price value.
-
-occasion:
-- Set when the customer mentions a context such as:
-  "party"
-  "wedding"
-  "gym"
-  "work"
-  "casual"
-
-keywords:
-- Use for features or qualities that no other field covers.
-- Examples:
-  "waterproof"
-  "lightweight"
-  "wide fit"
-  "comfortable for standing all day"
-- Keep the customer's own words where possible.
-- Carry these forward like other filters.
+minPrice / maxPrice:
+- "over", "above", "more than" a price → minPrice.
+- "under", "below", "up to", "less than" a price → maxPrice.
+- "cheap" alone is not a price.
 
 gender:
-- Only three values exist:
-  "male"
-  "female"
-  "unisex"
+- "male", "female" or "unisex", only when the customer states it.
+- men's / guys / for him → male. women's / ladies / for her → female.
+- Never infer gender from a product type or brand. Men's and women's searches also include unisex products.
 
-Map:
-- men's / guys / for him / boys → male
-- women's / ladies / for her / girls → female
-- unisex / for anyone / for everyone → unisex
-
-Set gender only when the customer explicitly states it.
-
-Never infer gender from product type or brand.
-
-Searching "male" or "female" also includes unisex products.
-
-sortPreference:
+sort:
 - "price_low_to_high" for cheapest, budget, affordable.
 - "price_high_to_low" for most expensive, premium.
 - "newest" for latest or new arrivals.
-- Omit otherwise.
-- Default is best match first.
+- Omit otherwise. The default is best match first.
 
-page:
-- Only use when the customer asks for more of the same search.
-- Examples:
-  "show me more"
-  "any others?"
-- Pass the next page number.
-- Omit for a new or changed search.
+showMore:
+- true only when the customer wants more or different options for the same search ("show me more", "any others?").
+- Repeat the other fields of the last search with it. Products already shown are left out automatically.
+
+Never pass null, empty strings, or 0 unless 0 is a value the customer actually gave.
 
 
-CONTEXT CARRY-FORWARD:
+FOLLOW-UP SEARCHES:
 
-Active filters from the previous search are shown under ACTIVE FILTERS.
+LAST SEARCH at the end of these instructions is what you searched last in this conversation.
 
-On every new search:
-1. Start from the active filters.
-2. Apply only what the customer changed or added.
-3. Keep filters the customer did not change.
-4. Remove filters only when the customer clearly says they no longer matter or starts a clearly unrelated search.
+- If the customer refines it ("in white", "under $80", "size 10"), repeat the last search with only that change.
+- If the customer drops something ("any colour is fine"), leave that field out.
+- If the customer asks for something different, start a fresh search with only what they asked for now. Do not carry old filters into a new search.
 
 Examples:
 
-ACTIVE FILTERS:
-colour: red
-brand: Nike
-category: Sneakers
+LAST SEARCH: {"query":"running","brand":"Nike","colour":"black"}
+Customer: "what about under $80?"
+→ { query: "running", brand: "Nike", colour: "black", maxPrice: 80 }
 
-Customer:
-"now show me something under $80"
+LAST SEARCH: {"brand":"Adidas","category":"Training"}
+Customer: "actually I need white shoes for a wedding"
+→ { query: "for a wedding", colour: "white" }
 
-→ call:
-{
-  colour: "red",
-  brand: "Nike",
-  category: "Sneakers",
-  maxPrice: 80
-}
-
-
-ACTIVE FILTERS:
-colour: red
-
-Customer:
-"i want above 35"
-
-→ call:
-{
-  colour: "red",
-  minPrice: 35
-}
-
-
-ACTIVE FILTERS:
-colour: black
-category: Running
-
-Customer:
-"show me the same but in white"
-
-→ call:
-{
-  colour: "white",
-  category: "Running"
-}
-
-
-ACTIVE FILTERS:
-brand: Adidas
-category: Training
-
-Customer:
-"what about size 10?"
-
-→ call:
-{
-  brand: "Adidas",
-  category: "Training",
-  size: "10"
-}
-
-
-ACTIVE FILTERS:
-colour: red
-minPrice: 35
-
-Customer:
-"any colour is fine"
-
-→ call:
-{
-  minPrice: 35
-}
-
-
-ACTIVE FILTERS:
-colour: red
-category: Sneakers
-
-Customer:
-"actually i need a white shoes for a wedding"
-
-→ Treat this as a new search because the customer has clearly changed what they are shopping for.
-
-→ call:
-{
-  colour: "white",
-  category: "Sneakers",
-  occasion: "wedding"
-}
-
-
-OMISSION RULES:
-
-- Omit any field that was not explicitly mentioned or validly carried forward.
-- Do not pass null.
-- Do not pass empty strings.
-- Do not pass 0 unless 0 is explicitly a valid customer-provided value.
-- Do not guess.
-- "cheap shoes" does NOT automatically mean maxPrice.
-- Do not infer gender from category or brand.
+LAST SEARCH: {"query":"comfortable for standing all day"}
+Customer: "show me more"
+→ { query: "comfortable for standing all day", showMore: true }
 
 
 PICKUP LOCATIONS — ZIMBABWE:
@@ -641,61 +474,42 @@ Lino should feel like a great shopping assistant — not a search engine, not a 
 `;
 
 
-function buildSystemPrompt(lastIntent: Record<string, any> | null): string {
-  if (!lastIntent || Object.keys(lastIntent).length === 0) {
-    return LINO_BASE_PROMPT + '\nACTIVE FILTERS: none — this is a fresh search.';
-  }
-
-  const lines = Object.entries(lastIntent)
-    .filter(([, v]) => v !== null && v !== undefined)
-    .map(([k, v]) => `  ${k}: ${v}`);
-
-  return LINO_BASE_PROMPT + '\nACTIVE FILTERS (carry these forward unless the user changes them):\n' + lines.join('\n');
+function buildSystemPrompt(lastSearch: LinoSearchState | null): string {
+  if (!lastSearch) return LINO_BASE_PROMPT + '\nLAST SEARCH: none — this is a fresh conversation.';
+  const { query, filters, sort } = lastSearch;
+  const summary = { ...(query ? { query } : {}), ...filters, ...(sort !== 'relevance' ? { sort } : {}) };
+  return LINO_BASE_PROMPT + `\nLAST SEARCH: ${JSON.stringify(summary)}`;
 }
 
-function extractIntentFromMessages(responseMessages: any[]): Record<string, any> | null {
-  let intent: Record<string, any> | null = null;
-  for (const msg of responseMessages) {
-    if (msg.role === 'assistant' && Array.isArray(msg.content)) {
-      for (const part of msg.content) {
-        if (part.type === 'tool-call' && part.toolName === 'search_products') {
-          // page belongs to one request only, so it is not carried forward
-          const { page, ...args } = part.input ?? part.args ?? {};
-          if (Object.keys(args).length > 0) intent = args;
-        }
-      }
-    }
-  }
-  return intent;
+// Conversations saved before the shared search stored their filters in another shape; those start fresh.
+function readLastSearch(value: unknown): LinoSearchState | null {
+  const state = value as LinoSearchState | null;
+  return state && typeof state === 'object' && 'filters' in state && Array.isArray(state.shownIds) ? state : null;
 }
 
-// Repeats the active filters right next to the latest user message (model-only, not persisted)
-// so they aren't lost at the bottom of the long system prompt.
-function withActiveFilters(message: string, lastIntent: Record<string, any> | null): string {
-  const entries = Object.entries(lastIntent ?? {}).filter(([, v]) => v !== null && v !== undefined);
-  if (entries.length === 0) return message;
-  const filters = entries.map(([k, v]) => `${k}: ${v}`).join(', ');
-  return `[ACTIVE FILTERS from previous search: ${filters}]
-
-${message}`;
+function toolResultProducts(part: any): any[] | null {
+  const products = part.result?.products ?? part.output?.value?.products ?? part.output?.products;
+  return Array.isArray(products) ? products : null;
 }
 
+// The products of the last search in this turn: the model may search again to refine,
+// and the customer should see what the reply talks about.
 function extractProductsFromMessages(responseMessages: any[]): any[] {
+  let products: any[] = [];
   for (const msg of responseMessages) {
     if (msg.role === 'tool' && Array.isArray(msg.content)) {
       for (const part of msg.content) {
         if (part.type === 'tool-result' && part.toolName === 'search_products') {
-          const products =
-            (part.result as any)?.products ??
-            (part.output as any)?.value?.products ??
-            (part.output as any)?.products;
-          if (Array.isArray(products) && products.length > 0) return products;
+          products = toolResultProducts(part) ?? products;
         }
       }
     }
   }
-  return [];
+  return products;
 }
+
+// A search call plus the reply, with room for one refining search.
+const MAX_STEPS = 3;
 
 function canAccessConversation(ownerId: string | null, userId?: string): boolean {
   return !ownerId || ownerId === userId;
@@ -740,13 +554,10 @@ export class LinoService implements OnModuleInit {
   async handleChat(sessionId: string, message: string, userId?: string) {
     const conversation = await this.getOrCreateConversation(sessionId, message, userId);
     const history = await this.loadHistory(conversation.id);
-    const activeFilters = conversation.lastIntent as Record<string, any> | null;
-    const semanticContext = buildSemanticContext(message, activeFilters ?? undefined);
-    const semanticEval = evaluateSemanticIntent(message, semanticContext.intent);
-    const systemPrompt = buildSystemPrompt(activeFilters);
+    const lastSearch = readLastSearch(conversation.lastIntent);
+    let newSearch: LinoSearchState | null = null;
 
-    this.logger.log(`Semantic intent for session ${sessionId}: ${JSON.stringify(semanticEval)}`);
-    history.push({ role: 'user', content: `${withActiveFilters(message, activeFilters)}\n\n${semanticContext.prompt}` });
+    history.push({ role: 'user', content: message });
     await this.prisma.linoMessage.create({
       data: { linoConversationId: conversation.id, role: 'user', content: message },
     });
@@ -757,51 +568,34 @@ export class LinoService implements OnModuleInit {
 
     const result = await generateText({
       model,
-      system: systemPrompt,
+      system: buildSystemPrompt(lastSearch),
       messages: history,
-      tools: this.toolsService.getTools(),
-      stopWhen: isStepCount(5),
+      tools: this.toolsService.getTools({ lastSearch, onSearch: (state) => (newSearch = state) }),
+      stopWhen: isStepCount(MAX_STEPS),
     });
 
-    const responseMessages = result.responseMessages || [];
-    const products = extractProductsFromMessages(responseMessages);
-    const newIntent = extractIntentFromMessages(responseMessages);
-
-    await this.prisma.linoMessage.create({
-      data: {
-        linoConversationId: conversation.id,
-        role: 'assistant',
-        content: result.text,
-        metadata: products.length > 0 ? { products } : null,
-      },
-    });
-
-    if (newIntent) {
-      await this.prisma.linoConversation.update({
-        where: { id: conversation.id },
-        data: { lastIntent: newIntent },
-      });
-    }
+    const products = extractProductsFromMessages(result.responseMessages || []);
+    await this.saveReply(conversation.id, result.text, products, newSearch);
 
     return { reply: result.text, products };
   }
 
+  // Server-sent events: "status" while working, "products" as soon as a search returns
+  // (before the reply is written), then "text" chunks, then "done".
   async handleChatStream(sessionId: string, message: string, res: any, userId?: string) {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
-    res.write(`data: ${JSON.stringify({ type: 'status', message: 'Analyzing your request...' })}\n\n`);
+    const send = (event: Record<string, unknown>) => res.write(`data: ${JSON.stringify(event)}\n\n`);
+    send({ type: 'status', message: 'Analyzing your request...' });
 
     try {
       const conversation = await this.getOrCreateConversation(sessionId, message, userId);
       const history = await this.loadHistory(conversation.id);
-      const activeFilters = conversation.lastIntent as Record<string, any> | null;
-      const semanticContext = buildSemanticContext(message, activeFilters ?? undefined);
-      const semanticEval = evaluateSemanticIntent(message, semanticContext.intent);
-      const systemPrompt = buildSystemPrompt(activeFilters);
+      const lastSearch = readLastSearch(conversation.lastIntent);
+      let newSearch: LinoSearchState | null = null;
 
-      this.logger.log(`Semantic intent for stream session ${sessionId}: ${JSON.stringify(semanticEval)}`);
-      history.push({ role: 'user', content: `${withActiveFilters(message, activeFilters)}\n\n${semanticContext.prompt}` });
+      history.push({ role: 'user', content: message });
       await this.prisma.linoMessage.create({
         data: { linoConversationId: conversation.id, role: 'user', content: message },
       });
@@ -812,63 +606,54 @@ export class LinoService implements OnModuleInit {
 
       const result = streamText({
         model,
-        system: systemPrompt,
+        system: buildSystemPrompt(lastSearch),
         messages: history,
-        tools: this.toolsService.getTools(),
-        stopWhen: isStepCount(5),
+        tools: this.toolsService.getTools({ lastSearch, onSearch: (state) => (newSearch = state) }),
+        stopWhen: isStepCount(MAX_STEPS),
       });
 
-      let streamedProducts: any[] = [];
+      let products: any[] = [];
       let fullText = '';
 
       for await (const chunk of result.fullStream) {
         if (chunk.type === 'text-delta') {
           fullText += chunk.text;
-          res.write(`data: ${JSON.stringify({ type: 'text', chunk: chunk.text })}\n\n`);
+          send({ type: 'text', chunk: chunk.text });
         } else if (chunk.type === 'tool-call') {
-          const statusText = chunk.toolName === 'search_products'
-            ? 'Searching catalog for products...'
-            : 'Working on it...';
-          res.write(`data: ${JSON.stringify({ type: 'status', message: statusText })}\n\n`);
+          const statusText = chunk.toolName === 'search_products' ? 'Searching catalog for products...' : 'Working on it...';
+          send({ type: 'status', message: statusText });
         } else if (chunk.type === 'tool-result' && chunk.toolName === 'search_products') {
-          const found =
-            (chunk as any).result?.products ||
-            (chunk as any).output?.value?.products ||
-            (chunk as any).output?.products || [];
-          if (Array.isArray(found) && found.length > 0) {
-            streamedProducts = found;
-            res.write(`data: ${JSON.stringify({ type: 'products', products: streamedProducts })}\n\n`);
-          }
-          res.write(`data: ${JSON.stringify({ type: 'status', message: 'Summarizing results...' })}\n\n`);
+          products = toolResultProducts(chunk) ?? products;
+          send({ type: 'products', products });
+          send({ type: 'status', message: 'Summarizing results...' });
         }
       }
 
-      const responseMessages = (await result.responseMessages) || [];
-      const finalProducts = streamedProducts.length > 0 ? streamedProducts : extractProductsFromMessages(responseMessages);
-      const newIntent = extractIntentFromMessages(responseMessages);
-
-      await this.prisma.linoMessage.create({
-        data: {
-          linoConversationId: conversation.id,
-          role: 'assistant',
-          content: fullText,
-          metadata: finalProducts.length > 0 ? { products: finalProducts } : null,
-        },
-      });
-
-      if (newIntent) {
-        await this.prisma.linoConversation.update({
-          where: { id: conversation.id },
-          data: { lastIntent: newIntent },
-        });
-      }
-
-      res.write(`data: ${JSON.stringify({ type: 'done' })}\n\n`);
+      await this.saveReply(conversation.id, fullText, products, newSearch);
+      send({ type: 'done' });
       res.end();
     } catch (error) {
       this.logger.error('Error during AI stream generation', error);
-      res.write(`data: ${JSON.stringify({ type: 'error', message: 'Failed to process request' })}\n\n`);
+      send({ type: 'error', message: 'Failed to process request' });
       res.end();
+    }
+  }
+
+  private async saveReply(conversationId: string, text: string, products: any[], search: LinoSearchState | null) {
+    await this.prisma.linoMessage.create({
+      data: {
+        linoConversationId: conversationId,
+        role: 'assistant',
+        content: text,
+        metadata: products.length > 0 ? { products } : null,
+      },
+    });
+
+    if (search) {
+      await this.prisma.linoConversation.update({
+        where: { id: conversationId },
+        data: { lastIntent: search as any },
+      });
     }
   }
 

@@ -9,6 +9,7 @@ import { UpdateVariantDto } from './dto/update-variant.dto';
 import { revalidateFrontendCache, FrontendApp, CacheTag } from '../../libs/common/src';
 import { generateSearchTags } from './utils/search-tags.util';
 import { IN_STOCK_PRODUCT_WHERE } from './utils/in-stock.util';
+import { SearchIndexer } from '../search/index/search-indexer.service';
 
 function assertValidDescription(description: string | undefined) {
   if (!description || description.trim().length < MIN_DESCRIPTION_LENGTH) {
@@ -92,7 +93,8 @@ function toPopularListingProduct<T extends PopularProductRow>(product: T) {
 export class ProductService {
   constructor(
     private readonly cloudinaryService: CloudinaryService,
-    private readonly prisma: PrismaService
+    private readonly prisma: PrismaService,
+    private readonly searchIndexer: SearchIndexer
   ) { }
 
   async uploadFiles(files: Array<Express.Multer.File>) {
@@ -313,6 +315,7 @@ export class ProductService {
         timeout: 30000,
       });
 
+      await this.searchIndexer.reindexProduct(result.id);
       revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
       return {
         success: true,
@@ -366,7 +369,7 @@ export class ProductService {
     }
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const created = await this.prisma.$transaction(async (tx) => {
         // If this is set as default, un-set any existing default variant
         if (isDefault) {
           await tx.productVariant.updateMany({
@@ -418,6 +421,8 @@ export class ProductService {
         maxWait: 5000,
         timeout: 30000,
       });
+      await this.searchIndexer.reindexProduct(productId);
+      return created;
     } catch (error) {
       console.error('Create variant failed:', error);
       if (error.code === 'P2002' && error.meta?.target?.includes('sku')) {
@@ -457,7 +462,7 @@ export class ProductService {
     }
 
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const updated = await this.prisma.$transaction(async (tx) => {
         // If this is set as default, un-set any existing default variant
         if (isDefault) {
           await tx.productVariant.updateMany({
@@ -537,6 +542,8 @@ export class ProductService {
           message: "Variant updated successfully"
         };
       });
+      await this.searchIndexer.reindexProduct(variant.productId);
+      return updated;
     } catch (error) {
       console.error('Update variant failed:', error);
       if (error.code === 'P2002' && error.meta?.target?.includes('sku')) {
@@ -622,6 +629,7 @@ export class ProductService {
         }
       });
 
+      await this.searchIndexer.reindexProduct(variant.productId);
       revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
       return {
         success: true,
@@ -1280,6 +1288,7 @@ export class ProductService {
       };
     }
 
+    await this.searchIndexer.reindexProduct(productId);
     revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
     return {
       success: true,
@@ -1294,6 +1303,7 @@ export class ProductService {
       }
     });
 
+    await this.searchIndexer.removeSellerProducts(userId);
     revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
     return {
       success: true,
@@ -1321,6 +1331,7 @@ export class ProductService {
         }
       });
 
+      await this.searchIndexer.reindexProduct(productId); // the product is gone, so its search document is removed
       revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
       return {
         success: true,

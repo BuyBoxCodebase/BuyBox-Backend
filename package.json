@@ -48,6 +48,7 @@
     "express": "^5.1.0",
     "google-auth-library": "^9.15.1",
     "moment-timezone": "^0.6.3",
+    "mongoose": "^9.11.4",
     "multer": "2.0.2",
     "nodemailer": "^6.10.0",
     "passport": "^0.7.0",

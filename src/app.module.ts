@@ -27,6 +27,7 @@ import { LocationModule } from './location/location.module';
 import { CheckoutModule } from './checkout/checkout.module';
 import { LinoModule } from './lino/lino.module';
 import { DeliveryPricingModule } from './delivery-pricing/delivery-pricing.module';
+import { SearchModule } from './search/search.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { DeliveryPricingModule } from './delivery-pricing/delivery-pricing.modul
     CheckoutModule,
     LinoModule,
     DeliveryPricingModule,
+    SearchModule,
   ],
   controllers: [],
   providers: [],
