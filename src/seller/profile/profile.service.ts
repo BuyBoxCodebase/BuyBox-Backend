@@ -1,4 +1,5 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import * as argon2 from 'argon2';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { normalizePhone } from 'src/whatsapp/whatsapp-format';
@@ -11,6 +12,40 @@ export class SellerProfileService {
         private prisma: PrismaService,
         private readonly cloudinaryService: CloudinaryService,
     ) { }
+
+    async getPasswordStatus(userId: string) {
+        const seller = await this.prisma.seller.findUnique({
+            where: { id: userId },
+            select: { password: true },
+        });
+        if (!seller) throw new NotFoundException('Seller not found');
+
+        return { hasPassword: !!seller.password };
+    }
+
+    // Google-only accounts have no password yet, so they can set one without a current password.
+    async setPassword(userId: string, currentPassword: string | undefined, newPassword: string) {
+        if (!newPassword || newPassword.length < 8) {
+            throw new BadRequestException('Password must be at least 8 characters');
+        }
+
+        const seller = await this.prisma.seller.findUnique({ where: { id: userId } });
+        if (!seller) throw new NotFoundException('Seller not found');
+
+        if (seller.password) {
+            // 400 rather than 401: the session is fine, the typed password isn't.
+            if (!currentPassword || !(await argon2.verify(seller.password, currentPassword))) {
+                throw new BadRequestException('Current password is incorrect');
+            }
+        }
+
+        await this.prisma.seller.update({
+            where: { id: userId },
+            data: { password: await argon2.hash(newPassword) },
+        });
+
+        return { success: true, message: seller.password ? 'Password changed' : 'Password set' };
+    }
 
     async getSellerDetails(userId: string) {
         const seller = await this.prisma.seller.findUnique({

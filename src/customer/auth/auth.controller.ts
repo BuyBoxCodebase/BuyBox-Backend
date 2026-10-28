@@ -50,6 +50,16 @@ export class CustomerAuthController {
     return this.customerAuthService.loginCustomer(body.email, body.password);
   }
 
+  @Post('forgot-password')
+  async forgotPassword(@Body() body: { email: string }) {
+    return this.customerAuthService.forgotPassword(body.email);
+  }
+
+  @Post('reset-password')
+  async resetPassword(@Body() body: { token: string; password: string }) {
+    return this.customerAuthService.resetPassword(body.token, body.password);
+  }
+
   @UseGuards(JwtRefreshGuard)
   @Post('refresh')
   async refreshTokens(@Req() req) {
@@ -72,7 +82,7 @@ export class CustomerAuthController {
       req.user,
     );
 
-    const frontendUrl = process.env.CUSTOMER_FRONTEND_URL || 'https://buyboxie.com';
+    const frontendUrl = process.env.CUSTOMER_FRONTEND_URL || 'https://treides.com';
     res.redirect(`${frontendUrl}/customer?accessToken=${accessToken}&refreshToken=${refreshToken}`);
   }
 

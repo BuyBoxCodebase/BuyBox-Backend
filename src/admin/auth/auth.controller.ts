@@ -52,7 +52,7 @@ export class AdminAuthController {
   @Get('google/callback')
   async googleAuthCallback(@Req() req: Request, @Res() res: Response) {
     const { accessToken, refreshToken } = await this.adminAuthService.googleLogin(req.user);
-    const frontendUrl = process.env.ADMIN_FRONTEND_URL || 'https://admin.buyboxie.com';
+    const frontendUrl = process.env.ADMIN_FRONTEND_URL || 'https://admin.treides.com';
     res.redirect(`${frontendUrl}/admin?accessToken=${accessToken}&refreshToken=${refreshToken}`);
   }
 }

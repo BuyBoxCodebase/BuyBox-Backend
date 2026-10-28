@@ -50,6 +50,18 @@ export class SellerAuthService {
     });
   }
 
+  // Signing with the current password hash makes a reset link single-use:
+  // once the password changes, every outstanding link stops verifying.
+  private resetSecret(passwordHash: string | null): string {
+    return this.configService.get<string>('JWT_SECRET') + (passwordHash ?? '');
+  }
+
+  // Never send the password hash to the client.
+  private withoutPassword<T extends { password?: string | null }>(user: T) {
+    const { password, ...rest } = user;
+    return rest;
+  }
+
   async registerSeller(
     email: string,
     password: string,
@@ -146,7 +158,7 @@ export class SellerAuthService {
 
     // Social-signup accounts have no password; argon2.verify would throw on null.
     if (!user.password) {
-      throw new UnauthorizedException('This account was created with Google Sign-In. Please continue with Google.');
+      throw new UnauthorizedException('This account was created with Google Sign-In. Continue with Google, or use "Forgot password?" to set a password.');
     }
 
     if (!(await argon2.verify(user.password, password))) {
@@ -161,7 +173,63 @@ export class SellerAuthService {
     const accessToken = this.generateAccessToken(payload)
     const refreshToken = this.generateRefreshToken(payload);
 
-    return { user, accessToken, refreshToken };
+    return { user: this.withoutPassword(user), accessToken, refreshToken };
+  }
+
+  async forgotPassword(email: string) {
+    const user = await this.prisma.seller.findUnique({ where: { email } });
+
+    // Google-only accounts land here too, which is how they get a first password.
+    if (user) {
+      const token = this.jwtService.sign(
+        { sub: user.id, purpose: 'seller-password-reset' },
+        { secret: this.resetSecret(user.password), expiresIn: '30m' },
+      );
+      const frontendUrl = process.env.SELLER_FRONTEND_URL || 'https://sell.treides.com';
+
+      await this.mailService.sendMail({
+        email: user.email,
+        subject: 'Reset your password',
+        mail_file: 'password_reset_mail.ejs',
+        data: {
+          name: user.name,
+          // The seller site's /forgot-password page shows the reset form when it has a token.
+          resetUrl: `${frontendUrl}/forgot-password?token=${token}`,
+        },
+      });
+    }
+
+    // Same answer either way so this can't be used to find out who has an account.
+    return { message: 'If an account exists for that email, we have sent a link to reset the password.' };
+  }
+
+  async resetPassword(token: string, newPassword: string) {
+    if (!newPassword || newPassword.length < 8) {
+      throw new BadRequestException('Password must be at least 8 characters');
+    }
+
+    const invalidLink = new BadRequestException('This reset link is invalid or has expired. Please request a new one.');
+
+    // Read the user id first: the signing secret depends on that user's current hash.
+    const decoded = this.jwtService.decode(token) as { sub?: string } | null;
+    if (!decoded?.sub) throw invalidLink;
+
+    const user = await this.prisma.seller.findUnique({ where: { id: decoded.sub } });
+    if (!user) throw invalidLink;
+
+    try {
+      const payload = this.jwtService.verify(token, { secret: this.resetSecret(user.password) });
+      if (payload.purpose !== 'seller-password-reset') throw invalidLink;
+    } catch {
+      throw invalidLink;
+    }
+
+    await this.prisma.seller.update({
+      where: { id: user.id },
+      data: { password: await argon2.hash(newPassword) },
+    });
+
+    return { message: 'Your password has been updated. You can now log in.' };
   }
 
   async sellerGoogleLogin(profile: any) {
@@ -189,7 +257,7 @@ export class SellerAuthService {
     const refreshToken = this.generateRefreshToken(payload);
 
     return {
-      user,
+      user: this.withoutPassword(user),
       accessToken,
       refreshToken,
     };

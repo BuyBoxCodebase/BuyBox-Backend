@@ -72,6 +72,16 @@ export class SellerAuthController {
     return this.sellerAuthService.loginSeller(body.email, body.password);
   }
 
+  @Post('forgot-password')
+  async forgotPassword(@Body() body: { email: string }) {
+    return this.sellerAuthService.forgotPassword(body.email);
+  }
+
+  @Post('reset-password')
+  async resetPassword(@Body() body: { token: string; password: string }) {
+    return this.sellerAuthService.resetPassword(body.token, body.password);
+  }
+
   @UseGuards(JwtRefreshGuard)
   @Post('refresh')
   async refreshToken(@Req() req: any) {
@@ -86,7 +96,7 @@ export class SellerAuthController {
   @Get('google/callback')
   async googleAuthCallbackSeller(@Req() req, @Res() res) {
     const { accessToken, refreshToken } = await this.sellerAuthService.sellerGoogleLogin(req.user);
-    const frontendUrl = process.env.SELLER_FRONTEND_URL || 'https://seller.buyboxie.com';
+    const frontendUrl = process.env.SELLER_FRONTEND_URL || 'https://sell.treides.com';
     res.redirect(`${frontendUrl}/seller?accessToken=${accessToken}&refreshToken=${refreshToken}`);
   }
 }

@@ -39,6 +39,18 @@ export class SellerProfileController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('password')
+  async getPasswordStatus(@Req() req) {
+    return this.sellerProfileService.getPasswordStatus(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('password')
+  async setPassword(@Req() req, @Body() body: { currentPassword?: string; newPassword: string }) {
+    return this.sellerProfileService.setPassword(req.user.userId, body.currentPassword, body.newPassword);
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Delete('delete')
   async deleteProfile(@Req() req) {
     return this.sellerProfileService.deleteProfile(req.user.userId);

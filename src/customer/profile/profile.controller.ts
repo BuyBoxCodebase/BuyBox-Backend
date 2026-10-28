@@ -31,4 +31,16 @@ export class CustomerProfileController {
   async updateCustomer(@Req() req, @Body() body) {
     return this.customerProfileService.updateCustomerDetails(req.user.userId, body);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get("password")
+  async getPasswordStatus(@Req() req) {
+    return this.customerProfileService.getPasswordStatus(req.user.userId);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post("password")
+  async setPassword(@Req() req, @Body() body: { currentPassword?: string; newPassword: string }) {
+    return this.customerProfileService.setPassword(req.user.userId, body.currentPassword, body.newPassword);
+  }
 }
