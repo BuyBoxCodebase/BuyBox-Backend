@@ -29,7 +29,11 @@ export class AiProviderService implements OnModuleInit {
       this.logger.log('Initialized Ollama Provider via OpenAI SDK (llama3.1:8b)');
     } else if (provider === 'gemini') {
       const apiKey = this.configService.get<string>('GEMINI_API_KEY');
-      if (!apiKey) throw new Error('GEMINI_API_KEY is not set');
+      if (!apiKey) {
+        // Don't crash app bootstrap; only Lino endpoints should fail
+        this.logger.error('GEMINI_API_KEY is not set - Lino AI features disabled');
+        return;
+      }
       
       const { createGoogleGenerativeAI } = await eval(`import('@ai-sdk/google')`);
       const google = createGoogleGenerativeAI({ apiKey });
@@ -38,7 +42,11 @@ export class AiProviderService implements OnModuleInit {
       this.logger.log('Initialized Gemini AI Provider');
     } else {
       const apiKey = this.configService.get<string>('OPENAI_API_KEY');
-      if (!apiKey) throw new Error('OPENAI_API_KEY is not set');
+      if (!apiKey) {
+        // Don't crash app bootstrap; only Lino endpoints should fail
+        this.logger.error('OPENAI_API_KEY is not set - Lino AI features disabled');
+        return;
+      }
       
       const { createOpenAI } = await eval(`import('@ai-sdk/openai')`);
       const openai = createOpenAI({ apiKey });
