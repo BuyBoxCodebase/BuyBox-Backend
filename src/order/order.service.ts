@@ -5,6 +5,7 @@ import { MailerService } from '../../src/mailer/mailer.service';
 import { ActivityService } from '../analytics/activity/activity.service';
 import { OrderStatus, UserEventType } from '@prisma/client';
 import { SellerOrderNotifier } from '../whatsapp/seller-order-notifier.service';
+import { CustomerOrderNotifier } from '../whatsapp/customer-order-notifier.service';
 import { revalidateFrontendCache, FrontendApp, CacheTag } from '../../libs/common/src';
 import { DeliveryPricingService } from '../delivery-pricing/delivery-pricing.service';
 
@@ -15,6 +16,7 @@ export class OrderService {
     private readonly mailerService: MailerService,
     private readonly activityService: ActivityService,
     private readonly sellerOrderNotifier: SellerOrderNotifier,
+    private readonly customerOrderNotifier: CustomerOrderNotifier,
     private readonly deliveryPricingService: DeliveryPricingService,
   ) { }
 
@@ -246,6 +248,7 @@ export class OrderService {
     );
 
     this.sellerOrderNotifier.notifySellers(order.id);
+    this.customerOrderNotifier.notifyOrderPlaced(order.id);
 
     // Not part of the transaction: a failed save must not fail the order
     this.saveOrderPreference(userId, createOrderDto)
@@ -674,8 +677,13 @@ export class OrderService {
       };
     });
 
+    if (status === OrderStatus.PROCESSING) {
+      this.customerOrderNotifier.notifyOrderAccepted(orderId);
+    }
+
     // Rejected orders put stock back, so restocked products reappear in the cached listings
     if (status === OrderStatus.OUT_OF_STOCK) {
+      this.customerOrderNotifier.notifyOutOfStock(orderId);
       revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
     }
     return result;

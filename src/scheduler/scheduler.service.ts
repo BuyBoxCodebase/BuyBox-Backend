@@ -1,10 +1,10 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
-import { SchedulerRegistry } from '@nestjs/schedule';
 import { CronJob } from 'cron';
 import { PrismaService } from '../prisma/prisma.service';
 import { MockNotificationService } from './mock-notification.service';
 import * as moment from 'moment-timezone';
 import { OrderStatus } from '@prisma/client';
+import { CustomerOrderNotifier } from '../whatsapp/customer-order-notifier.service';
 
 @Injectable()
 export class SchedulerService implements OnModuleInit, OnModuleDestroy {
@@ -14,9 +14,9 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
     private jobCount = 0;
 
     constructor(
-        private schedulerRegistry: SchedulerRegistry,
         private prisma: PrismaService,
-        private notificationService: MockNotificationService
+        private notificationService: MockNotificationService,
+        private customerOrderNotifier: CustomerOrderNotifier,
     ) { }
 
     onModuleInit() {
@@ -34,7 +34,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
             const orders = await this.prisma.order.findMany({
                 where: {
                     fulfillmentType: 'PICKUP',
-                    status: { notIn: [OrderStatus.COMPLETED, OrderStatus.CANCELED] },
+                    status: OrderStatus.PROCESSING,
                     pickupDate: {
                         gte: tomorrow.toDate(),
                         lte: endOfTomorrow.toDate(),
@@ -49,6 +49,8 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
                         where: { id: order.id },
                         data: { status: 'READY_FOR_PICKUP' }
                     });
+                    // pickupDate is set: the query above only matches orders due tomorrow
+                    await this.customerOrderNotifier.notifyReadyForCollection(order.id, order.pickupDate!, order.pickupLocation);
                     const subject = `Your Treides order is ready!`;
                     let content = `Your Treides order is ready!\n${order.pickupLocation.name}\nOpen 9am - 4pm\n(Closed Sundays)\n`;
                     if (order.pickupLocation.coordinates) {
