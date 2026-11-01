@@ -19,7 +19,14 @@ export class DeliveryService {
         const ongoingOrders = await this.prisma.order.findMany({
             where: {
                 deliveryAgentId,
-                status: { in: [OrderStatus.PENDING, OrderStatus.PROCESSING] },
+                status: {
+                    in: [
+                        OrderStatus.PENDING,
+                        OrderStatus.PROCESSING,
+                        OrderStatus.DISPATCHED,
+                        OrderStatus.OUT_FOR_DELIVERY,
+                    ],
+                },
             },
         });
         return ongoingOrders;

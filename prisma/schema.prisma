@@ -292,6 +292,8 @@ enum OrderStatus {
   CANCELED
   OUT_OF_STOCK
   READY_FOR_PICKUP
+  DISPATCHED
+  OUT_FOR_DELIVERY
 }
 
 enum FulfillmentType {

@@ -602,18 +602,44 @@ export class OrderService {
     return transformedOrders;
   }
 
-  // A seller acts on a PENDING order from their dashboard: PROCESSING accepts it,
-  // OUT_OF_STOCK rejects it and returns the reserved stock. No other transition is
-  // seller-settable — COMPLETED is the delivery flow's, CANCELED is the customer's.
-  private static readonly SELLER_SETTABLE_STATUSES: OrderStatus[] = [
-    OrderStatus.PROCESSING,
-    OrderStatus.OUT_OF_STOCK,
+  // What a seller can move an order to, keyed by its current status. PENDING is
+  // accepted (PROCESSING) or rejected (OUT_OF_STOCK, which returns the reserved stock).
+  // An accepted order then moves on to READY_FOR_PICKUP (pickup orders) or
+  // DISPATCHED -> OUT_FOR_DELIVERY (delivery orders), and finally COMPLETED once
+  // collected / delivered. The delivery-agent OTP flow can also set COMPLETED.
+  // CANCELED is the customer's.
+  private static readonly SELLER_TRANSITIONS: Partial<Record<OrderStatus, OrderStatus[]>> = {
+    [OrderStatus.PENDING]: [OrderStatus.PROCESSING, OrderStatus.OUT_OF_STOCK],
+    [OrderStatus.PROCESSING]: [
+      OrderStatus.READY_FOR_PICKUP,
+      OrderStatus.DISPATCHED,
+      OrderStatus.OUT_FOR_DELIVERY,
+    ],
+    [OrderStatus.READY_FOR_PICKUP]: [OrderStatus.COMPLETED],
+    [OrderStatus.DISPATCHED]: [OrderStatus.OUT_FOR_DELIVERY, OrderStatus.COMPLETED],
+    [OrderStatus.OUT_FOR_DELIVERY]: [OrderStatus.COMPLETED],
+  };
+
+  private static readonly PICKUP_ONLY_STATUSES: OrderStatus[] = [OrderStatus.READY_FOR_PICKUP];
+  private static readonly DELIVERY_ONLY_STATUSES: OrderStatus[] = [
+    OrderStatus.DISPATCHED,
+    OrderStatus.OUT_FOR_DELIVERY,
   ];
 
+  private static readonly SELLER_STATUS_MESSAGES: Partial<Record<OrderStatus, string>> = {
+    [OrderStatus.PROCESSING]: "Order accepted",
+    [OrderStatus.OUT_OF_STOCK]: "Order marked as out of stock",
+    [OrderStatus.READY_FOR_PICKUP]: "Order marked as ready for pickup",
+    [OrderStatus.DISPATCHED]: "Order marked as dispatched",
+    [OrderStatus.OUT_FOR_DELIVERY]: "Order marked as out for delivery",
+    [OrderStatus.COMPLETED]: "Order marked as completed",
+  };
+
   async updateSellerOrderStatus(userId: string, orderId: string, status: OrderStatus) {
-    if (!OrderService.SELLER_SETTABLE_STATUSES.includes(status)) {
+    const sellerSettable = new Set(Object.values(OrderService.SELLER_TRANSITIONS).flat());
+    if (!sellerSettable.has(status)) {
       throw new BadRequestException(
-        `Status must be one of: ${OrderService.SELLER_SETTABLE_STATUSES.join(', ')}`
+        `Status must be one of: ${[...sellerSettable].join(', ')}`
       );
     }
 
@@ -631,7 +657,8 @@ export class OrderService {
           }
         },
         include: {
-          products: true
+          products: true,
+          pickupLocation: true
         }
       });
 
@@ -639,10 +666,18 @@ export class OrderService {
         throw new NotFoundException("Order not found");
       }
 
-      if (order.status !== OrderStatus.PENDING) {
+      const allowed = OrderService.SELLER_TRANSITIONS[order.status] ?? [];
+      if (!allowed.includes(status)) {
         throw new BadRequestException(
-          `Only pending orders can be updated. This order is already ${order.status}.`
+          `This order is ${order.status} and cannot be changed to ${status}.`
         );
+      }
+
+      if (OrderService.PICKUP_ONLY_STATUSES.includes(status) && order.fulfillmentType !== 'PICKUP') {
+        throw new BadRequestException("Only pickup orders can be marked ready for pickup.");
+      }
+      if (OrderService.DELIVERY_ONLY_STATUSES.includes(status) && order.fulfillmentType !== 'DELIVERY') {
+        throw new BadRequestException("Only delivery orders can be dispatched or sent out for delivery.");
       }
 
       // Rejecting the order releases every reserved unit, matching cancelOrder.
@@ -670,10 +705,9 @@ export class OrderService {
 
       return {
         success: true,
-        message: status === OrderStatus.PROCESSING
-          ? "Order accepted"
-          : "Order marked as out of stock",
-        order: updatedOrder
+        message: OrderService.SELLER_STATUS_MESSAGES[status],
+        order: updatedOrder,
+        pickupLocation: order.pickupLocation
       };
     });
 
@@ -681,12 +715,41 @@ export class OrderService {
       this.customerOrderNotifier.notifyOrderAccepted(orderId);
     }
 
+    // Marking it early takes the order out of the daily pickup job, so send its WhatsApp here.
+    const { pickupLocation, ...response } = result;
+    if (status === OrderStatus.READY_FOR_PICKUP && pickupLocation && response.order.pickupDate) {
+      this.customerOrderNotifier.notifyReadyForCollection(orderId, response.order.pickupDate, pickupLocation);
+    }
+
     // Rejected orders put stock back, so restocked products reappear in the cached listings
     if (status === OrderStatus.OUT_OF_STOCK) {
       this.customerOrderNotifier.notifyOutOfStock(orderId);
       revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
     }
-    return result;
+
+    // Same analytics events the delivery-agent OTP flow logs on completion.
+    if (status === OrderStatus.COMPLETED) {
+      const completed = response.order;
+      const eventTypes = completed.fulfillmentType === 'DELIVERY'
+        ? [UserEventType.ORDER_COMPLETED, UserEventType.ORDER_DELIVERED]
+        : [UserEventType.ORDER_COMPLETED];
+      this.prisma.orderProduct.findMany({
+        where: { orderId },
+        select: { productId: true, variantId: true, product: { select: { categoryId: true } } },
+      }).then(items => Promise.all(items.flatMap(item => eventTypes.map(type =>
+        this.prisma.userEvent.create({
+          data: {
+            customerId: completed.userId,
+            sessionId: `system-order-${orderId}`,
+            productId: item.productId,
+            categoryId: item.product?.categoryId || undefined,
+            type,
+            metadata: { orderId, variantId: item.variantId, completedBy: 'SELLER' },
+          }
+        })
+      )))).catch(err => console.error('Failed to log ORDER_COMPLETED events:', err));
+    }
+    return response;
   }
 
   async cancelOrder(userId: string, orderId: string) {
