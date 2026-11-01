@@ -5,6 +5,7 @@ import { MockNotificationService } from './mock-notification.service';
 import * as moment from 'moment-timezone';
 import { OrderStatus } from '@prisma/client';
 import { CustomerOrderNotifier } from '../whatsapp/customer-order-notifier.service';
+import { logError } from '../../libs/common/src';
 
 @Injectable()
 export class SchedulerService implements OnModuleInit, OnModuleDestroy {
@@ -113,13 +114,15 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         }
     }
 
-    scheduleJob(date: Date, callback: () => void, name?: string): string {
+    scheduleJob(date: Date, callback: () => void | Promise<void>, name?: string): string {
         const jobId = name || `job_${++this.jobCount}`;
         const now = new Date();
 
         if (date <= now) {
             this.logger.warn(`Job ${jobId} scheduled for past date. Executing immediately.`);
-            callback();
+            Promise.resolve()
+                .then(() => callback())
+                .catch((error) => logError(error, { source: 'background', context: 'SchedulerService: scheduled job', extra: { jobId } }));
             return jobId;
         }
 
@@ -132,7 +135,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
                 await callback();
                 this.timeoutMap.delete(jobId);
             } catch (error) {
-                this.logger.error(`Error executing scheduled job ${jobId}: ${error.message}`, error.stack);
+                await logError(error, { source: 'background', context: 'SchedulerService: scheduled job', extra: { jobId } });
             }
         }, delay);
 
@@ -140,7 +143,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
         return jobId;
     }
 
-    scheduleRecurringJob(cronExpression: string, callback: () => void, name?: string, timeZone?: string): string {
+    scheduleRecurringJob(cronExpression: string, callback: () => void | Promise<void>, name?: string, timeZone?: string): string {
         const jobId = name || `recurring_job_${++this.jobCount}`;
 
         try {
@@ -151,7 +154,7 @@ export class SchedulerService implements OnModuleInit, OnModuleDestroy {
                         this.logger.debug(`Executing recurring job: ${jobId}`);
                         await callback();
                     } catch (error) {
-                        this.logger.error(`Error executing recurring job ${jobId}: ${error.message}`, error.stack);
+                        await logError(error, { source: 'background', context: 'SchedulerService: recurring job', extra: { jobId, cronExpression } });
                     }
                 },
                 null,

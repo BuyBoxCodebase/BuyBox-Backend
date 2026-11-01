@@ -6,6 +6,7 @@ import { EmbeddingService } from '../retrieval/embedding.service';
 import { buildSearchDoc, ProductData, SearchDocFields, toObjectId } from './search-doc-builder';
 import { SEARCH_SYNONYMS } from './search-synonyms';
 import { findOptionValue, isColourOption, isSizeOption } from '../../product/utils/variant-options.util';
+import { logError } from '../../../libs/common/src';
 
 const REBUILD_CHUNK = 200;
 
@@ -33,7 +34,7 @@ export class SearchIndexer {
       const models = await getSearchModels();
       await this.indexProducts(models, [toObjectId(productId)]);
     } catch (error) {
-      this.logger.error(`Could not re-index product ${productId}`, error);
+      await logError(error, { context: 'SearchIndexer.reindexProduct', extra: { productId } });
     }
   }
 
@@ -44,7 +45,7 @@ export class SearchIndexer {
       const productIds = await models.Product.distinct('_id', { sellerId: toObjectId(sellerId) });
       await models.ProductSearchDoc.deleteMany({ sellerId: toObjectId(sellerId), _id: { $nin: productIds } });
     } catch (error) {
-      this.logger.error(`Could not remove search documents of seller ${sellerId}`, error);
+      await logError(error, { context: 'SearchIndexer.removeSellerProducts', extra: { sellerId } });
     }
   }
 

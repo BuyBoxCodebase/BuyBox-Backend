@@ -1,4 +1,4 @@
-import { generateOTP } from '../../libs/common/src';
+import { generateOTP, safely } from '../../libs/common/src';
 import { ForbiddenException, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { OrderStatus, UserEventType } from '@prisma/client';
@@ -126,23 +126,17 @@ export class DeliveryService {
             })
 
             // Log ORDER_COMPLETED and ORDER_DELIVERED event for each product in the order
-            for (const item of order.products) {
-                this.events.logUserEvent({
-                    customerId: order.userId,
-                    sessionId: 'system-delivery',
-                    productId: item.productId,
-                    categoryId: item.product.categoryId || undefined,
-                    type: UserEventType.ORDER_COMPLETED
-                }).catch(err => console.error('Failed to log product event:', err));
-
-                this.events.logUserEvent({
-                    customerId: order.userId,
-                    sessionId: 'system-delivery',
-                    productId: item.productId,
-                    categoryId: item.product.categoryId || undefined,
-                    type: UserEventType.ORDER_DELIVERED
-                }).catch(err => console.error('Failed to log product event:', err));
-            }
+            await Promise.all(order.products.flatMap((item) =>
+                [UserEventType.ORDER_COMPLETED, UserEventType.ORDER_DELIVERED].map((type) =>
+                    safely('DeliveryService: logging order event', this.events.logUserEvent({
+                        customerId: order.userId,
+                        sessionId: 'system-delivery',
+                        productId: item.productId,
+                        categoryId: item.product.categoryId || undefined,
+                        type,
+                    }), { orderId: order.id, productId: item.productId, type })
+                )
+            ));
 
             return updatedOrder;
         })

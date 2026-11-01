@@ -7,6 +7,7 @@ import { gendersFor, normaliseKey } from '../query/normalise';
 import { SearchFilters } from '../search.types';
 import { EmbeddingService } from './embedding.service';
 import { fuseRankings } from './rank-fusion';
+import { logError } from '../../../libs/common/src';
 
 // Atlas indexes on the ProductSearchDoc collection. They exist on the cluster and update themselves as
 // documents change; on a new cluster, run POST /search/reindex first (it creates the SearchSynonym
@@ -68,9 +69,13 @@ export class Retriever {
       keywordText ? this.keywordSearch(keywordText, filters) : Promise.resolve([]),
       this.vectorSearch(text, filters),
     ]);
+    if (vector.status === 'rejected') {
+      await logError(vector.reason, { context: 'Retriever.retrieve: vector search failed', extra: { text } });
+    }
     if (keyword.status === 'rejected' && vector.status === 'rejected') throw keyword.reason;
-    if (keyword.status === 'rejected') this.logger.error(`Keyword search failed: ${keyword.reason?.message}`);
-    if (vector.status === 'rejected') this.logger.error(`Vector search failed: ${vector.reason?.message}`);
+    if (keyword.status === 'rejected') {
+      await logError(keyword.reason, { context: 'Retriever.retrieve: keyword search failed, used vector search only', extra: { keywordText } });
+    }
 
     const keywordHits = keyword.status === 'fulfilled' ? keyword.value : [];
     const vectorHits = vector.status === 'fulfilled' ? vector.value : [];
@@ -129,7 +134,7 @@ export class Retriever {
       queryVector = await this.embeddings.embedQuery(text);
     } catch (error) {
       // Without the embedding API the search still works on keywords alone.
-      this.logger.error(`Embedding failed, using keyword search only: ${error.message}`);
+      await logError(error, { context: 'Retriever.vectorSearch: embedding failed, used keyword search only', extra: { text } });
       return [];
     }
 

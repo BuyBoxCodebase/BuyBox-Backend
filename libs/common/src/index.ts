@@ -4,3 +4,7 @@ export * from './roles';
 export * from './roles.decorator';
 export * from './roles.guard';
 export * from './revalidate';
+export * from './error-log/error-log.model';
+export * from './error-log/log-error';
+export * from './error-log/all-exceptions.filter';
+export * from './error-log/error-log.module';

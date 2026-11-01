@@ -9,6 +9,7 @@ import { AdMetricsService } from './ads-metrics.service';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 // import { CacheService } from '../cache/cache.service';
 import { SchedulerService } from '../scheduler/scheduler.service';
+import { logError } from '../../libs/common/src';
 
 @Injectable()
 export class AdsService {
@@ -24,8 +25,8 @@ export class AdsService {
         const now = new Date();
         const nextMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
 
-        this.schedulerService.scheduleJob(nextMidnight, () => {
-            this.processScheduledAds();
+        this.schedulerService.scheduleJob(nextMidnight, async () => {
+            await this.processScheduledAds();
 
             const now = new Date();
             const subsequentMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0);
@@ -45,7 +46,7 @@ export class AdsService {
                 resourceType: image.resource_type,
             }));
         } catch (error) {
-            this.logger.error(`Failed to upload ad media: ${error.message}`, error.stack);
+            await logError(error, { context: 'AdsService.uploadAdMedia' });
             throw new BadRequestException('Failed to upload media files');
         }
     }
@@ -86,7 +87,7 @@ export class AdsService {
 
             return newAd;
         } catch (error) {
-            this.logger.error(`Failed to create advertisement: ${error.message}`, error.stack);
+            await logError(error, { context: 'AdsService.create' });
             throw new BadRequestException('Failed to create advertisement');
         }
     }
@@ -793,7 +794,7 @@ export class AdsService {
                 await this.updateStatus(ad.id, AdStatus.ENDED);
             }
         } catch (error) {
-            this.logger.error(`Error processing scheduled ads: ${error.message}`, error.stack);
+            await logError(error, { source: 'background', context: 'AdsService.processScheduledAds' });
         }
     }
 
@@ -802,7 +803,7 @@ export class AdsService {
             await this.updateStatus(adId, AdStatus.ACTIVE);
             this.logger.log(`Activated scheduled ad ${adId}`);
         } catch (error) {
-            this.logger.error(`Error activating scheduled ad ${adId}: ${error.message}`);
+            await logError(error, { source: 'background', context: 'AdsService.activateScheduledAd', extra: { adId } });
         }
     }
 }

@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException, OnModuleInit } from '@nestjs/com
 import { AiProviderService } from './ai-provider.service';
 import { LinoSearchState, ToolsService } from './tools.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { isClientError, logError } from '../../../libs/common/src';
 
 
 const LINO_BASE_PROMPT = `IDENTITY:
@@ -574,6 +575,11 @@ export class LinoService implements OnModuleInit {
       stopWhen: isStepCount(MAX_STEPS),
     });
 
+    const toolErrors = ((result as any).steps ?? []).flatMap((step: any) => step.content ?? []).filter((part: any) => part?.type === 'tool-error');
+    for (const part of toolErrors) {
+      await logError(part.error, { context: 'LinoService.handleChat: tool-error', extra: { sessionId, toolName: part.toolName } });
+    }
+
     const products = extractProductsFromMessages(result.responseMessages || []);
     await this.saveReply(conversation.id, result.text, products, newSearch);
 
@@ -626,6 +632,11 @@ export class LinoService implements OnModuleInit {
           products = toolResultProducts(chunk) ?? products;
           send({ type: 'products', products });
           send({ type: 'status', message: 'Summarizing results...' });
+        } else if (chunk.type === 'error' || chunk.type === 'tool-error') {
+          await logError((chunk as any).error, {
+            context: `LinoService.handleChatStream: ${chunk.type}`,
+            extra: { sessionId, toolName: (chunk as any).toolName },
+          });
         }
       }
 
@@ -633,9 +644,15 @@ export class LinoService implements OnModuleInit {
       send({ type: 'done' });
       res.end();
     } catch (error) {
-      this.logger.error('Error during AI stream generation', error);
-      send({ type: 'error', message: 'Failed to process request' });
-      res.end();
+      if (!isClientError(error)) {
+        await logError(error, { context: 'LinoService.handleChatStream', extra: { sessionId } });
+      }
+      try {
+        send({ type: 'error', message: 'Failed to process request' });
+        res.end();
+      } catch (writeError) {
+        await logError(writeError, { context: 'LinoService.handleChatStream: sending the error event', extra: { sessionId } });
+      }
     }
   }
 

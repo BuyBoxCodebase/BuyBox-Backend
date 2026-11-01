@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { WhatsAppCloudClient } from './whatsapp-cloud.client';
 import { FEATURE_FLAGS } from '../feature-flags';
 import { normalizePhone, orderReference, templateText } from './whatsapp-format';
+import { logError } from '../../libs/common/src';
 
 interface Template {
   name: string;
@@ -106,7 +107,10 @@ export class CustomerOrderNotifier {
       );
       this.logger.log(`Customer ${order.user.id} notified that order ${orderId} was ${event} (wamid ${messageId})`);
     } catch (error) {
-      this.logger.error(`WhatsApp "${template.name}" for order ${orderId} failed: ${(error as Error).message}`);
+      await logError(error, {
+        context: `CustomerOrderNotifier: WhatsApp "${template.name}"`,
+        extra: { orderId, event, template: template.name },
+      });
     }
   }
 }

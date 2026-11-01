@@ -4,6 +4,7 @@ import { WhatsAppCloudClient } from './whatsapp-cloud.client';
 import { FEATURE_FLAGS } from '../feature-flags';
 import { findOptionValue, isColourOption, isSizeOption } from '../product/utils/variant-options.util';
 import { normalizePhone, orderReference, templateText } from './whatsapp-format';
+import { logError } from '../../libs/common/src';
 
 const ORDER_TEMPLATE_NAME = 'treides_seller_new_order_v2';
 const DEFAULT_COUNTRY_CODE = '263';
@@ -84,14 +85,15 @@ export class SellerOrderNotifier {
             const messageId = await this.whatsapp.sendTemplate(phone, ORDER_TEMPLATE_NAME, params, buttonParams);
             this.logger.log(`Seller ${seller.id} notified about order ${orderId} item ${item.id} (wamid ${messageId})`);
           } catch (error) {
-            this.logger.error(
-              `WhatsApp notification to seller ${seller.id} for order ${orderId} item ${item.id} failed: ${(error as Error).message}`,
-            );
+            await logError(error, {
+              context: 'SellerOrderNotifier.notifySellers: WhatsApp to seller',
+              extra: { orderId, sellerId: seller.id, orderProductId: item.id },
+            });
           }
         }),
       );
     } catch (error) {
-      this.logger.error(`Could not notify sellers about order ${orderId}`, (error as Error)?.stack);
+      await logError(error, { context: 'SellerOrderNotifier.notifySellers', extra: { orderId } });
     }
   }
 }

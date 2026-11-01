@@ -6,6 +6,7 @@ import * as path from 'path';
 import * as ejs from 'ejs';
 import * as fs from 'fs';
 import { SendMailDto } from './dto/send-mail.dto';
+import { logError } from '../../libs/common/src';
 @Injectable()
 export class MailerService {
 
@@ -53,7 +54,7 @@ export class MailerService {
             const result = await transport.sendMail(options);
             return result;
         } catch (error) {
-            console.log('[EMAIL_ERROR]', error);
+            await logError(error, { context: 'MailerService.sendMail', extra: { to: email, subject, mail_file } });
         }
     }
 }

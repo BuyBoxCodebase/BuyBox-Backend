@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { AddToCartDto, RemoveFromCartDto } from './dto/create-cart.dto';
+import { errorWithCause } from '../../libs/common/src';
 
 @Injectable()
 export class CartService {
@@ -391,8 +392,7 @@ export class CartService {
           message: "Cart cleared successfully"
         };
       } catch (error) {
-        console.error("Error clearing cart:", error);
-        throw new Error("Failed to clear cart. Transaction rolled back.");
+        throw errorWithCause("Failed to clear cart. Transaction rolled back.", error);
       }
     });
   }

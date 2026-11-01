@@ -3,7 +3,7 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { CloudinaryService } from '../cloudinary/cloudinary.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { revalidateFrontendCache, FrontendApp, CacheTag } from '../../libs/common/src';
+import { revalidateFrontendCache, FrontendApp, CacheTag, logError } from '../../libs/common/src';
 
 @Injectable()
 export class CategoryService {
@@ -19,11 +19,11 @@ export class CategoryService {
             await this.cacheManager.del('categories');
             await this.cacheManager.del('sub-categories');
         } catch (e) {
-            console.error("Failed to clear backend cache:", e);
+            await logError(e, { context: 'CategoryService.invalidateCaches: clearing the backend cache' });
         }
         
         // Ping Next.js frontend webhook to clear its cache
-        revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.CATEGORIES);
+        await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.CATEGORIES);
     }
 
     async uploadProfileImage(file: Array<Express.Multer.File>) {

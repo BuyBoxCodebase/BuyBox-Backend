@@ -1,6 +1,6 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { revalidateFrontendCache, FrontendApp, CacheTag } from '../../libs/common/src';
+import { revalidateFrontendCache, FrontendApp, CacheTag, logError, isClientError } from '../../libs/common/src';
 import { SearchIndexer } from '../search/index/search-indexer.service';
 
 @Injectable()
@@ -90,7 +90,7 @@ export class InventoryService {
 
             // Products going in/out of stock must be reflected in the cached customer listings and in search
             await this.searchIndexer.reindexProduct(variant.productId);
-            revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+            await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
 
             return {
                 success: true,
@@ -102,7 +102,9 @@ export class InventoryService {
                 }
             };
         } catch (error) {
-            console.error('Update inventory failed:', error);
+            if (!isClientError(error)) {
+                await logError(error, { context: 'InventoryService.updateInventory', extra: { variantId } });
+            }
             return {
                 success: false,
                 message: "Failed to update inventory: " + error.message
@@ -313,7 +315,7 @@ export class InventoryService {
             for (const productId of new Set(variants.map(v => v.product.id))) {
                 await this.searchIndexer.reindexProduct(productId);
             }
-            revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+            await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
 
             return {
                 success: true,
@@ -321,7 +323,9 @@ export class InventoryService {
                 results: results.filter(Boolean)
             };
         } catch (error) {
-            console.error('Batch update inventory failed:', error);
+            if (!isClientError(error)) {
+                await logError(error, { context: 'InventoryService.batchUpdateInventory' });
+            }
             return {
                 success: false,
                 message: "Failed to update inventory: " + error.message

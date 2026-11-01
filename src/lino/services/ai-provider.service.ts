@@ -1,6 +1,7 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import type { LanguageModel } from 'ai';
+import { logError } from '../../../libs/common/src';
 
 @Injectable()
 export class AiProviderService implements OnModuleInit {
@@ -31,7 +32,7 @@ export class AiProviderService implements OnModuleInit {
       const apiKey = this.configService.get<string>('GEMINI_API_KEY');
       if (!apiKey) {
         // Don't crash app bootstrap; only Lino endpoints should fail
-        this.logger.error('GEMINI_API_KEY is not set - Lino AI features disabled');
+        await logError(new Error('GEMINI_API_KEY is not set - Lino AI features disabled'), { source: 'startup', context: 'AiProviderService.initializeProvider' });
         return;
       }
       
@@ -44,7 +45,7 @@ export class AiProviderService implements OnModuleInit {
       const apiKey = this.configService.get<string>('OPENAI_API_KEY');
       if (!apiKey) {
         // Don't crash app bootstrap; only Lino endpoints should fail
-        this.logger.error('OPENAI_API_KEY is not set - Lino AI features disabled');
+        await logError(new Error('OPENAI_API_KEY is not set - Lino AI features disabled'), { source: 'startup', context: 'AiProviderService.initializeProvider' });
         return;
       }
       

@@ -13,9 +13,10 @@ import { registerSearchModels, SearchModels } from './search-models';
 // so the pool is kept small.
 const POOL_SIZE = 5;
 
-let connecting: Promise<SearchModels> | null = null;
+let connecting: Promise<Connection> | null = null;
+let searchModels: SearchModels | null = null;
 
-export function getSearchModels(): Promise<SearchModels> {
+export function getMongooseConnection(): Promise<Connection> {
   if (!connecting) {
     connecting = connect().catch((error) => {
       connecting = null; // let the next request try again
@@ -25,7 +26,13 @@ export function getSearchModels(): Promise<SearchModels> {
   return connecting;
 }
 
-async function connect(): Promise<SearchModels> {
+export async function getSearchModels(): Promise<SearchModels> {
+  const connection = await getMongooseConnection();
+  searchModels ??= registerSearchModels(connection);
+  return searchModels;
+}
+
+async function connect(): Promise<Connection> {
   const uri = process.env.DATABASE_URL;
   if (!uri) throw new Error('DATABASE_URL is not set');
 
@@ -37,7 +44,7 @@ async function connect(): Promise<SearchModels> {
     dns.promises.setServers(servers); // the driver uses the promise API, which has its own resolver
   }
 
-  const connection: Connection = await mongoose
+  return mongoose
     .createConnection(uri, {
       maxPoolSize: POOL_SIZE,
       minPoolSize: 0,
@@ -45,6 +52,4 @@ async function connect(): Promise<SearchModels> {
       maxIdleTimeMS: 60_000,
     })
     .asPromise();
-
-  return registerSearchModels(connection);
 }

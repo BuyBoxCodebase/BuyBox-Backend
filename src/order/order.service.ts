@@ -6,7 +6,7 @@ import { ActivityService } from '../analytics/activity/activity.service';
 import { OrderStatus, UserEventType } from '@prisma/client';
 import { SellerOrderNotifier } from '../whatsapp/seller-order-notifier.service';
 import { CustomerOrderNotifier } from '../whatsapp/customer-order-notifier.service';
-import { revalidateFrontendCache, FrontendApp, CacheTag } from '../../libs/common/src';
+import { revalidateFrontendCache, FrontendApp, CacheTag, logError, safely } from '../../libs/common/src';
 import { DeliveryPricingService } from '../delivery-pricing/delivery-pricing.service';
 
 @Injectable()
@@ -247,16 +247,15 @@ export class OrderService {
       }
     );
 
-    this.sellerOrderNotifier.notifySellers(order.id);
-    this.customerOrderNotifier.notifyOrderPlaced(order.id);
-
-    // Not part of the transaction: a failed save must not fail the order
-    this.saveOrderPreference(userId, createOrderDto)
-      .catch(err => console.error('[ORDER] Failed to save order preference', err));
-
-    this.activityService
-      .recordOrderPlaced(userId, order.id, order.totalAmount)
-      .catch(err => console.error('[ACTIVITY] Failed to record ORDER_PLACED', err));
+    const extra = { orderId: order.id };
+    const sideEffects: Promise<unknown>[] = [
+      safely('OrderService.createOrder: WhatsApp to sellers', this.sellerOrderNotifier.notifySellers(order.id), extra),
+      safely('OrderService.createOrder: WhatsApp to customer', this.customerOrderNotifier.notifyOrderPlaced(order.id), extra),
+      safely('OrderService.createOrder: saving order preference', () => this.saveOrderPreference(userId, createOrderDto), extra),
+      safely('OrderService.createOrder: recording ORDER_PLACED activity', () => this.activityService.recordOrderPlaced(userId, order.id, order.totalAmount), extra),
+      // Stock went down — products that just sold out must drop off the cached listings
+      revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS),
+    ];
 
     // Group products by seller for notifications
     try {
@@ -289,7 +288,7 @@ export class OrderService {
 
       // Send Customer Email
       if (order.email) {
-        this.mailerService.sendMail({
+        sideEffects.push(safely('OrderService.createOrder: customer email', this.mailerService.sendMail({
           email: order.email,
           subject: `Order Confirmation – Order #${order.id}`,
           mail_file: 'customer_order_mail.ejs',
@@ -302,12 +301,12 @@ export class OrderService {
             totalAmount: order.totalAmount,
             shippingMethod: shippingMethod,
           }
-        }).catch(err => console.error("[EMAIL_ERROR] Failed to send customer email", err));
+        }), extra));
       }
 
       // Send Seller Emails
       for (const [sellerId, data] of sellerProductsMap.entries()) {
-        this.mailerService.sendMail({
+        sideEffects.push(safely('OrderService.createOrder: seller email', this.mailerService.sendMail({
           email: data.user.email,
           subject: `New Order Notification – Order #${order.id}`,
           mail_file: 'order_creation_mail.ejs',
@@ -321,14 +320,13 @@ export class OrderService {
             totalAmount: data.products.reduce((acc, p) => acc + p.price, 0),
             shippingMethod: shippingMethod,
           }
-        }).catch(err => console.error("[EMAIL_ERROR] Failed to send seller email", err));
+        }), { ...extra, sellerId }));
       }
     } catch (err) {
-      console.error("[EMAIL_ERROR] Error constructing email notifications", err);
+      sideEffects.push(logError(err, { context: 'OrderService.createOrder: building order emails', extra }));
     }
 
-    // Stock went down — products that just sold out must drop off the cached listings
-    revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+    await Promise.all(sideEffects);
 
     return order;
   }
@@ -711,20 +709,28 @@ export class OrderService {
       };
     });
 
+    const extra = { orderId, status };
+    const { pickupLocation, ...response } = result;
+
     if (status === OrderStatus.PROCESSING) {
-      this.customerOrderNotifier.notifyOrderAccepted(orderId);
+      await safely('OrderService.updateSellerOrderStatus: WhatsApp order accepted', this.customerOrderNotifier.notifyOrderAccepted(orderId), extra);
     }
 
     // Marking it early takes the order out of the daily pickup job, so send its WhatsApp here.
-    const { pickupLocation, ...response } = result;
     if (status === OrderStatus.READY_FOR_PICKUP && pickupLocation && response.order.pickupDate) {
-      this.customerOrderNotifier.notifyReadyForCollection(orderId, response.order.pickupDate, pickupLocation);
+      await safely(
+        'OrderService.updateSellerOrderStatus: WhatsApp ready for collection',
+        this.customerOrderNotifier.notifyReadyForCollection(orderId, response.order.pickupDate, pickupLocation),
+        extra,
+      );
     }
 
     // Rejected orders put stock back, so restocked products reappear in the cached listings
     if (status === OrderStatus.OUT_OF_STOCK) {
-      this.customerOrderNotifier.notifyOutOfStock(orderId);
-      revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+      await Promise.all([
+        safely('OrderService.updateSellerOrderStatus: WhatsApp out of stock', this.customerOrderNotifier.notifyOutOfStock(orderId), extra),
+        revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS),
+      ]);
     }
 
     // Same analytics events the delivery-agent OTP flow logs on completion.
@@ -733,21 +739,24 @@ export class OrderService {
       const eventTypes = completed.fulfillmentType === 'DELIVERY'
         ? [UserEventType.ORDER_COMPLETED, UserEventType.ORDER_DELIVERED]
         : [UserEventType.ORDER_COMPLETED];
-      this.prisma.orderProduct.findMany({
-        where: { orderId },
-        select: { productId: true, variantId: true, product: { select: { categoryId: true } } },
-      }).then(items => Promise.all(items.flatMap(item => eventTypes.map(type =>
-        this.prisma.userEvent.create({
-          data: {
-            customerId: completed.userId,
-            sessionId: `system-order-${orderId}`,
-            productId: item.productId,
-            categoryId: item.product?.categoryId || undefined,
-            type,
-            metadata: { orderId, variantId: item.variantId, completedBy: 'SELLER' },
-          }
-        })
-      )))).catch(err => console.error('Failed to log ORDER_COMPLETED events:', err));
+      await safely('OrderService.updateSellerOrderStatus: logging ORDER_COMPLETED events', async () => {
+        const items = await this.prisma.orderProduct.findMany({
+          where: { orderId },
+          select: { productId: true, variantId: true, product: { select: { categoryId: true } } },
+        });
+        await Promise.all(items.flatMap(item => eventTypes.map(type =>
+          this.prisma.userEvent.create({
+            data: {
+              customerId: completed.userId,
+              sessionId: `system-order-${orderId}`,
+              productId: item.productId,
+              categoryId: item.product?.categoryId || undefined,
+              type,
+              metadata: { orderId, variantId: item.variantId, completedBy: 'SELLER' },
+            }
+          })
+        )));
+      }, extra);
     }
     return response;
   }
@@ -818,7 +827,10 @@ export class OrderService {
               type: UserEventType.ORDER_CANCELED,
               metadata: { orderId, variantId: item.variantId }
             }
-          }).catch(err => console.error('Failed to log ORDER_CANCELED event:', err));
+          }).catch(err => logError(err, {
+            context: 'OrderService.cancelOrder: logging ORDER_CANCELED event',
+            extra: { orderId, productId: item.productId },
+          }));
         }
       }
 
@@ -830,7 +842,7 @@ export class OrderService {
     });
 
     // Cancelled items go back into stock, so restocked products reappear in the cached listings
-    revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+    await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
     return result;
   }
 

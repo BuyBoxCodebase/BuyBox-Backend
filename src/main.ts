@@ -1,5 +1,14 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
+import { logError } from '../libs/common/src';
+
+process.on('unhandledRejection', async (reason) => {
+  await logError(reason, { source: 'process', context: 'unhandledRejection', handled: false });
+});
+process.on('uncaughtException', async (error) => {
+  await logError(error, { source: 'process', context: 'uncaughtException', handled: false });
+  process.exit(1);
+});
 
 // Exact origins plus Vercel preview deploys. Apex is listed alongside www:
 // the page redirects apex -> www, but a request already issued from the apex
@@ -38,4 +47,8 @@ async function bootstrap() {
   });
   await app.listen(3000);
 }
-bootstrap();
+
+bootstrap().catch(async (error) => {
+  await logError(error, { source: 'startup', context: 'bootstrap', handled: false });
+  process.exit(1);
+});

@@ -6,7 +6,7 @@ import { CreateProductDto, MIN_DESCRIPTION_LENGTH, PRODUCT_GENDERS, ProductAttri
 import { UpdateProductDto } from './dto/update-product.dto';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
-import { revalidateFrontendCache, FrontendApp, CacheTag } from '../../libs/common/src';
+import { revalidateFrontendCache, FrontendApp, CacheTag, logError, isClientError } from '../../libs/common/src';
 import { generateSearchTags } from './utils/search-tags.util';
 import { IN_STOCK_PRODUCT_WHERE } from './utils/in-stock.util';
 import { SearchIndexer } from '../search/index/search-indexer.service';
@@ -316,14 +316,16 @@ export class ProductService {
       });
 
       await this.searchIndexer.reindexProduct(result.id);
-      revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+      await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
       return {
         success: true,
         message: "New Product Added with Default Variant",
         productId: result.id
       };
     } catch (error) {
-      console.error('Transaction failed:', error);
+      if (!isClientError(error)) {
+        await logError(error, { context: 'ProductService.createProduct' });
+      }
       return {
         success: false,
         message: "Failed to create product: " + error.message
@@ -411,7 +413,7 @@ export class ProductService {
           }
         });
 
-        revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+        await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
         return {
           success: true,
           message: "Variant created successfully",
@@ -424,12 +426,14 @@ export class ProductService {
       await this.searchIndexer.reindexProduct(productId);
       return created;
     } catch (error) {
-      console.error('Create variant failed:', error);
       if (error.code === 'P2002' && error.meta?.target?.includes('sku')) {
         return {
           success: false,
           message: "A variant with this SKU already exists"
         };
+      }
+      if (!isClientError(error)) {
+        await logError(error, { context: 'ProductService.createVariant', extra: { productId } });
       }
       return {
         success: false,
@@ -536,7 +540,7 @@ export class ProductService {
           );
         }
 
-        revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+        await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
         return {
           success: true,
           message: "Variant updated successfully"
@@ -545,12 +549,14 @@ export class ProductService {
       await this.searchIndexer.reindexProduct(variant.productId);
       return updated;
     } catch (error) {
-      console.error('Update variant failed:', error);
       if (error.code === 'P2002' && error.meta?.target?.includes('sku')) {
         return {
           success: false,
           message: "A variant with this SKU already exists"
         };
+      }
+      if (!isClientError(error)) {
+        await logError(error, { context: 'ProductService.updateVariant', extra: { variantId } });
       }
       return {
         success: false,
@@ -630,13 +636,15 @@ export class ProductService {
       });
 
       await this.searchIndexer.reindexProduct(variant.productId);
-      revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+      await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
       return {
         success: true,
         message: "Variant deleted successfully"
       };
     } catch (error) {
-      console.error('Delete variant failed:', error);
+      if (!isClientError(error)) {
+        await logError(error, { context: 'ProductService.deleteVariant', extra: { variantId } });
+      }
       return {
         success: false,
         message: "Failed to delete variant: " + error.message
@@ -736,8 +744,7 @@ export class ProductService {
       return groupedProducts;
     }
     catch (err) {
-      console.error('Get products failed:', err);
-      throw new InternalServerErrorException('Failed to get products');
+      throw new InternalServerErrorException('Failed to get products', { cause: err });
     }
   }
 
@@ -831,8 +838,7 @@ export class ProductService {
       };
     }
     catch (err) {
-      console.error('Get products by subcategory failed:', err);
-      throw new InternalServerErrorException('Failed to get products by subcategory');
+      throw new InternalServerErrorException('Failed to get products by subcategory', { cause: err });
     }
   }
 
@@ -1289,7 +1295,7 @@ export class ProductService {
     }
 
     await this.searchIndexer.reindexProduct(productId);
-    revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+    await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
     return {
       success: true,
       message: "Updated the product successfully"
@@ -1304,7 +1310,7 @@ export class ProductService {
     });
 
     await this.searchIndexer.removeSellerProducts(userId);
-    revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+    await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
     return {
       success: true,
       message: "All Product have been deleted"
@@ -1332,13 +1338,15 @@ export class ProductService {
       });
 
       await this.searchIndexer.reindexProduct(productId); // the product is gone, so its search document is removed
-      revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+      await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
       return {
         success: true,
         message: "Product deleted"
       };
     } catch (error) {
-      console.error('Delete product failed:', error);
+      if (!isClientError(error)) {
+        await logError(error, { context: 'ProductService.deleteProduct', extra: { productId } });
+      }
       return {
         success: false,
         message: "Failed to delete product: " + error.message
@@ -1436,7 +1444,7 @@ export class ProductService {
       });
     }
 
-    revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+    await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
     return {
       productId,
       message: `Processed ${results.length} options`,

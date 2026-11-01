@@ -28,10 +28,12 @@ import { CheckoutModule } from './checkout/checkout.module';
 import { LinoModule } from './lino/lino.module';
 import { DeliveryPricingModule } from './delivery-pricing/delivery-pricing.module';
 import { SearchModule } from './search/search.module';
+import { ErrorLogModule, logError } from '../libs/common/src';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    ErrorLogModule,
     CacheModule.registerAsync({
       isGlobal: true,
       useFactory: async () => {
@@ -41,7 +43,7 @@ import { SearchModule } from './search/search.module';
             console.log('Connected to Redis Cache');
             return { stores: [store] };
           } catch (error) {
-            console.error('Failed to connect to Redis, falling back to in-memory cache:', error);
+            await logError(error, { source: 'startup', context: 'AppModule: Redis cache connection (fell back to in-memory cache)' });
           }
         }
         return {}; // Fallback to default in-memory cache
