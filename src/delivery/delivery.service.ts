@@ -5,6 +5,7 @@ import { OrderStatus, UserEventType } from '@prisma/client';
 import { MailerService } from '../mailer/mailer.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
+import { CustomerOrderNotifier } from '../whatsapp/customer-order-notifier.service';
 
 @Injectable()
 export class DeliveryService {
@@ -13,6 +14,7 @@ export class DeliveryService {
         private readonly mailer: MailerService,
         private readonly jwtService: JwtService,
         private readonly events: EventsService,
+        private readonly customerOrderNotifier: CustomerOrderNotifier,
     ) { }
 
     async getOngoingOrders(deliveryAgentId: string) {
@@ -140,6 +142,12 @@ export class DeliveryService {
 
             return updatedOrder;
         })
+
+        await safely(
+            'DeliveryService.confirmDelivery: WhatsApp order delivered',
+            this.customerOrderNotifier.notifyOrderDelivered(order.id),
+            { orderId: order.id },
+        );
 
         return updatedOrder;
     }

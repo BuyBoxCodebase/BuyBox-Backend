@@ -16,6 +16,11 @@ const ORDER_PLACED_TEMPLATE: Template = { name: 'order_confirmation_v1', languag
 const ORDER_ACCEPTED_TEMPLATE: Template = { name: 'tredeis_seller_order_accept', language: 'en_US' };
 const OUT_OF_STOCK_TEMPLATE: Template = { name: 'tredies_seller_out_of_stock', language: 'en_US' };
 const READY_FOR_COLLECTION_TEMPLATE: Template = { name: 'treides_ready_for_collection', language: 'en_US' };
+// Submitted as plain "English" (en), not "English (US)" like the templates above.
+const OUT_FOR_DELIVERY_TEMPLATE: Template = { name: 'treides_out_for_delivery', language: 'en' };
+const ORDER_DELIVERED_TEMPLATE: Template = { name: 'treides_order_delivered', language: 'en' };
+// Cloud API code for a template that doesn't exist (yet) in this language, e.g. still in review.
+const TEMPLATE_NOT_AVAILABLE_CODE = 132001;
 const STORE_NAME = 'Treides';
 const DEFAULT_COUNTRY_CODE = '263';
 
@@ -75,6 +80,19 @@ export class CustomerOrderNotifier {
     );
   }
 
+  /** Sent when the seller marks a delivery order out for delivery. */
+  async notifyOutForDelivery(orderId: string): Promise<void> {
+    // Body: {{1}} customer first name, {{2}} order reference.
+    // "Track Order" URL button -> https://www.treides.com/order/{{1}}, takes the order ID.
+    await this.send(orderId, 'out for delivery', OUT_FOR_DELIVERY_TEMPLATE, (firstName) => [firstName, orderReference(orderId)], [orderId]);
+  }
+
+  /** Sent when a delivery order is completed, by the seller or the delivery agent's OTP flow. */
+  async notifyOrderDelivered(orderId: string): Promise<void> {
+    // Body: {{1}} customer first name, {{2}} order reference, {{3}} store name. No buttons.
+    await this.send(orderId, 'delivered', ORDER_DELIVERED_TEMPLATE, (firstName) => [firstName, orderReference(orderId), STORE_NAME]);
+  }
+
   private async send(
     orderId: string,
     event: string,
@@ -107,6 +125,11 @@ export class CustomerOrderNotifier {
       );
       this.logger.log(`Customer ${order.user.id} notified that order ${orderId} was ${event} (wamid ${messageId})`);
     } catch (error) {
+      // Until Meta approves a new template every send fails this way; warn instead of alerting.
+      if ((error as { code?: number })?.code === TEMPLATE_NOT_AVAILABLE_CODE) {
+        this.logger.warn(`Template "${template.name}" is not approved yet; order ${orderId} not notified that it was ${event}`);
+        return;
+      }
       await logError(error, {
         context: `CustomerOrderNotifier: WhatsApp "${template.name}"`,
         extra: { orderId, event, template: template.name },

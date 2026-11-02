@@ -725,6 +725,14 @@ export class OrderService {
       );
     }
 
+    if (status === OrderStatus.OUT_FOR_DELIVERY) {
+      await safely('OrderService.updateSellerOrderStatus: WhatsApp out for delivery', this.customerOrderNotifier.notifyOutForDelivery(orderId), extra);
+    }
+
+    if (status === OrderStatus.COMPLETED && response.order.fulfillmentType === 'DELIVERY') {
+      await safely('OrderService.updateSellerOrderStatus: WhatsApp order delivered', this.customerOrderNotifier.notifyOrderDelivered(orderId), extra);
+    }
+
     // Rejected orders put stock back, so restocked products reappear in the cached listings
     if (status === OrderStatus.OUT_OF_STOCK) {
       await Promise.all([

@@ -53,8 +53,11 @@ export class WhatsAppCloudClient {
     }
     const error = body?.error ?? {};
     const detail = error.error_data?.details ? ` (${error.error_data.details})` : '';
-    throw new Error(
-      `WhatsApp API ${response.status}${error.code ? ` code ${error.code}` : ''}: ${error.message ?? 'unknown error'}${detail}`,
+    throw Object.assign(
+      new Error(
+        `WhatsApp API ${response.status}${error.code ? ` code ${error.code}` : ''}: ${error.message ?? 'unknown error'}${detail}`,
+      ),
+      { code: error.code as number | undefined },
     );
   }
 }

@@ -7,6 +7,7 @@ import { JwtStrategy } from '../customer/auth/strategy/jwt.strategy';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventsModule } from '../events/events.module';
+import { WhatsAppModule } from '../whatsapp/whatsapp.module';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { EventsModule } from '../events/events.module';
       inject: [ConfigService],
     }),
     EventsModule,
+    WhatsAppModule,
   ],
   controllers: [DeliveryController],
   providers: [
