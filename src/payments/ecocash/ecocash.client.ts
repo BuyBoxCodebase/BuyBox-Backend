@@ -173,8 +173,17 @@ export class EcocashClient {
     if (!res.ok) {
       const code = typeof parsed?.statusCode === 'string' ? parsed.statusCode : null;
       const message =
-        parsed?.statusMessage ?? parsed?.message ?? (typeof parsed === 'string' && parsed) ?? `HTTP ${res.status}`;
-      throw new EcocashApiError(String(message), res.status, code, parsed);
+        parsed?.statusMessage ||
+        parsed?.message ||
+        parsed?.error ||
+        (typeof parsed === 'string' && parsed.slice(0, 500)) ||
+        `EcoCash returned HTTP ${res.status} with no error message`;
+      throw new EcocashApiError(
+        typeof message === 'string' ? message : JSON.stringify(message),
+        res.status,
+        code,
+        parsed,
+      );
     }
     return parsed;
   }

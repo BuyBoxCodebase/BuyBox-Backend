@@ -276,7 +276,15 @@ export class EcocashService {
     });
 
     if (!declined) {
-      await logError(err, { context: 'EcocashService: charge request rejected', extra: { paymentId: payment.id } });
+      await logError(err, {
+        context: 'EcocashService: charge request rejected',
+        extra: {
+          paymentId: payment.id,
+          ...(err instanceof EcocashApiError
+            ? { httpStatus: err.httpStatus, ecocashCode: err.code, ecocashBody: err.body }
+            : {}),
+        },
+      });
     }
   }
 
