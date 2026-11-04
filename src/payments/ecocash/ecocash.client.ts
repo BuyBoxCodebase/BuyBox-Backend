@@ -136,6 +136,19 @@ export class EcocashClient {
 
   private async send(method: 'GET' | 'POST', path: string, body?: unknown): Promise<any> {
     const { baseUrl, username, password } = this.config;
+    const debugSandbox = baseUrl.includes('/sandbox/');
+    if (debugSandbox) {
+      console.log(
+        '[ECOCASH-DEBUG] config',
+        JSON.stringify({
+          ...this.config,
+          usernameLength: username.length,
+          passwordLength: password.length,
+          callbackBaseUrl: process.env.ECOCASH_CALLBACK_BASE_URL ?? null,
+        }),
+      );
+      console.log('[ECOCASH-DEBUG] request', method, `${baseUrl}${path}`, JSON.stringify(body ?? null));
+    }
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -159,6 +172,10 @@ export class EcocashClient {
     }
 
     const text = await res.text();
+    // TEMP-DEBUG: remove with the block above
+    if (debugSandbox) {
+      console.log('[ECOCASH-DEBUG] response', res.status, text.slice(0, 2000));
+    }
     let parsed: any = text;
     try {
       parsed = text ? JSON.parse(text) : null;
