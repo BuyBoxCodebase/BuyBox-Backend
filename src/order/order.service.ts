@@ -330,6 +330,54 @@ export class OrderService {
 
     return order;
   }
+  async calculateOrderTotal(createOrderDto: CreateOrderDto): Promise<number> {
+    const { cartId, products, fulfillmentType, pickupLocationId, deliveryCoordinates } = createOrderDto;
+    const lines: { productId: string; variantId?: string; quantity: number; totalPrice: number }[] = [];
+
+    if (cartId) {
+      const cart = await this.prisma.cart.findUnique({ where: { id: cartId }, include: { products: true } });
+      if (!cart || cart.products.length === 0) {
+        throw new BadRequestException('Cart not found or is empty');
+      }
+      for (const item of cart.products) {
+        lines.push({ productId: item.productId, variantId: item.variantId ?? undefined, quantity: item.quantity, totalPrice: item.totalPrice });
+      }
+    } else if (products) {
+      const { productId, variantId, quantity } = products;
+      const product = await this.prisma.product.findUnique({ where: { id: productId } });
+      if (!product) throw new BadRequestException(`Product with ID ${productId} not found`);
+      let itemPrice = product.basePrice;
+      if (variantId) {
+        const variant = await this.prisma.productVariant.findUnique({ where: { id: variantId } });
+        if (!variant || variant.productId !== productId) {
+          throw new BadRequestException(`Variant ${variantId} not found for product ${productId}`);
+        }
+        itemPrice = variant.price;
+      }
+      lines.push({ productId, variantId, quantity, totalPrice: itemPrice * quantity });
+    } else {
+      throw new BadRequestException('Either cartId or products must be provided');
+    }
+
+    for (const line of lines) {
+      const inventory = await this.prisma.inventory.findFirst({
+        where: line.variantId ? { variantId: line.variantId } : { productId: line.productId },
+      });
+      if (!inventory || inventory.quantity < line.quantity) {
+        throw new BadRequestException('Some items in your order are out of stock. Please review your cart.');
+      }
+    }
+
+    const quote = await this.deliveryPricingService.quote({
+      productIds: lines.map((line) => line.productId),
+      method: fulfillmentType || 'DELIVERY',
+      hubId: pickupLocationId,
+      customerCoordinates: deliveryCoordinates,
+    });
+
+    const total = lines.reduce((sum, line) => sum + line.totalPrice, 0) + quote.totalFee;
+    return Math.round(total * 100) / 100;
+  }
 
   // One saved set of checkout details per customer, overwritten on every order
   private async saveOrderPreference(userId: string, createOrderDto: CreateOrderDto) {

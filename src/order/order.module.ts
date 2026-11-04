@@ -17,5 +17,6 @@ import { DeliveryPricingModule } from '../delivery-pricing/delivery-pricing.modu
   ],
   controllers: [OrderController],
   providers: [OrderService],
+  exports: [OrderService],
 })
 export class OrderModule { }

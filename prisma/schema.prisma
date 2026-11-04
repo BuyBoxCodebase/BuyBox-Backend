@@ -240,6 +240,54 @@ enum PaymentMode {
   DEBIT_CARD
   UPI
   NETBANKING
+  ECOCASH
+}
+
+// Each step of an EcoCash payment gets its own status so a stuck or failed payment
+// shows exactly where it stopped. The order is only created after PAID.
+enum EcocashPaymentStatus {
+  INITIATED     // Record saved, charge not yet sent to EcoCash
+  PUSH_SENT     // EcoCash accepted the charge, waiting for the customer's PIN
+  PUSH_FAILED   // EcoCash rejected the charge request (bad number, credentials, outage)
+  FAILED        // Customer side failure: insufficient funds, limit exceeded, wrong PIN
+  EXPIRED       // No confirmation within 10 minutes
+  PAID          // EcoCash confirmed the money; order not created yet
+  ORDER_CREATED // Paid and the order exists
+  ORDER_FAILED  // Paid but the order could not be created — needs a refund
+}
+
+model EcocashPayment {
+  id               String               @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String               @db.ObjectId
+  status           EcocashPaymentStatus @default(INITIATED)
+  // Our unique id for the charge, sent to EcoCash and used for status lookups
+  clientCorrelator String               @unique
+  referenceCode    String
+  // Customer EcoCash number as sent to EcoCash (7XXXXXXXX)
+  endUserId        String
+  amount           Float
+  currency         String
+  // The checkout form, replayed into OrderService.createOrder once paid
+  checkoutData     Json
+  ecocashReference String?
+  orderId          String?              @db.ObjectId
+  failureReason    String?
+
+  // Raw EcoCash traffic, kept for debugging
+  chargeRequest    Json?
+  chargeResponse   Json?
+  lastLookup       Json?
+  lastCallback     Json?
+
+  expiresAt        DateTime
+  pushSentAt       DateTime?
+  paidAt           DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  @@index([userId])
+  @@index([status])
 }
 
 model Order {
