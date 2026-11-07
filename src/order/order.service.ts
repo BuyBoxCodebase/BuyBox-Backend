@@ -8,6 +8,7 @@ import { SellerOrderNotifier } from '../whatsapp/seller-order-notifier.service';
 import { CustomerOrderNotifier } from '../whatsapp/customer-order-notifier.service';
 import { revalidateFrontendCache, FrontendApp, CacheTag, logError, safely } from '../../libs/common/src';
 import { DeliveryPricingService } from '../delivery-pricing/delivery-pricing.service';
+import { ReferralService } from '../referral/referral.service';
 
 @Injectable()
 export class OrderService {
@@ -18,10 +19,11 @@ export class OrderService {
     private readonly sellerOrderNotifier: SellerOrderNotifier,
     private readonly customerOrderNotifier: CustomerOrderNotifier,
     private readonly deliveryPricingService: DeliveryPricingService,
+    private readonly referralService: ReferralService,
   ) { }
 
   async createOrder(userId: string, createOrderDto: CreateOrderDto) {
-    const { email, address, phoneNumber, paymentMode, products, cartId, fulfillmentType, pickupLocationId, pickupDate, deliveryCoordinates } = createOrderDto;
+    const { email, address, phoneNumber, paymentMode, products, cartId, fulfillmentType, pickupLocationId, pickupDate, deliveryCoordinates, referralCode, creditAmount } = createOrderDto;
     const method = fulfillmentType || 'DELIVERY';
 
     const order = await this.prisma.$transaction(
@@ -194,6 +196,10 @@ export class OrderService {
           throw new Error("Either cartId or products must be provided");
         }
 
+        // totalAmount is still products only here, which is what the referral 10% applies to
+        const referral = await this.referralService.price(userId, referralCode, totalAmount, prisma);
+        const creditUsed = await this.referralService.spendCredit(userId, creditAmount, totalAmount - (referral?.discount ?? 0), prisma);
+
         // Delivery fees are always recalculated here; any amount the client shows is display-only
         const quote = await this.deliveryPricingService.quote({
           productIds: orderProductsData.map((item) => item.productId),
@@ -201,7 +207,8 @@ export class OrderService {
           hubId: pickupLocationId,
           customerCoordinates: deliveryCoordinates,
         });
-        totalAmount += quote.totalFee;
+        // Rounded the same way as calculateOrderTotal, which sets what EcoCash charges
+        totalAmount = Math.round((totalAmount + quote.totalFee - (referral?.discount ?? 0) - creditUsed) * 100) / 100;
 
         const order = await prisma.order.create({
           data: {
@@ -222,6 +229,9 @@ export class OrderService {
             deliveryCoordinates: method === 'DELIVERY'
               ? { latitude: deliveryCoordinates.latitude, longitude: deliveryCoordinates.longitude }
               : undefined,
+            referralCode: referral?.code,
+            referralDiscount: referral?.discount,
+            creditUsed: creditUsed || undefined,
             products: { create: orderProductsData },
           },
           include: {
@@ -239,6 +249,10 @@ export class OrderService {
             user: true,
           },
         });
+
+        if (referral) {
+          await this.referralService.record(referral, { orderId: order.id, referredCustomerId: userId, referredName: order.user.name }, prisma);
+        }
 
         return order;
       },
@@ -330,8 +344,8 @@ export class OrderService {
 
     return order;
   }
-  async calculateOrderTotal(createOrderDto: CreateOrderDto): Promise<number> {
-    const { cartId, products, fulfillmentType, pickupLocationId, deliveryCoordinates } = createOrderDto;
+  async calculateOrderTotal(userId: string, createOrderDto: CreateOrderDto): Promise<number> {
+    const { cartId, products, fulfillmentType, pickupLocationId, deliveryCoordinates, referralCode, creditAmount } = createOrderDto;
     const lines: { productId: string; variantId?: string; quantity: number; totalPrice: number }[] = [];
 
     if (cartId) {
@@ -375,7 +389,11 @@ export class OrderService {
       customerCoordinates: deliveryCoordinates,
     });
 
-    const total = lines.reduce((sum, line) => sum + line.totalPrice, 0) + quote.totalFee;
+    const productsTotal = lines.reduce((sum, line) => sum + line.totalPrice, 0);
+    const referral = await this.referralService.price(userId, referralCode, productsTotal);
+    const productsDue = productsTotal - (referral?.discount ?? 0);
+    const credit = await this.referralService.checkCredit(userId, creditAmount, productsDue);
+    const total = productsDue + quote.totalFee - credit;
     return Math.round(total * 100) / 100;
   }
 
@@ -749,6 +767,8 @@ export class OrderService {
         data: { status }
       });
 
+      await this.referralService.settleForOrder(orderId, status, prisma);
+
       return {
         success: true,
         message: OrderService.SELLER_STATUS_MESSAGES[status],
@@ -871,6 +891,8 @@ export class OrderService {
         where: { id: orderId },
         data: { status: OrderStatus.CANCELED }
       });
+
+      await this.referralService.settleForOrder(orderId, OrderStatus.CANCELED, prisma);
 
       // Fire analytics event for cancellation
       for (const item of order.products) {

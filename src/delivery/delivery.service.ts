@@ -6,6 +6,7 @@ import { MailerService } from '../mailer/mailer.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsService } from '../events/events.service';
 import { CustomerOrderNotifier } from '../whatsapp/customer-order-notifier.service';
+import { ReferralService } from '../referral/referral.service';
 
 @Injectable()
 export class DeliveryService {
@@ -15,6 +16,7 @@ export class DeliveryService {
         private readonly jwtService: JwtService,
         private readonly events: EventsService,
         private readonly customerOrderNotifier: CustomerOrderNotifier,
+        private readonly referralService: ReferralService,
     ) { }
 
     async getOngoingOrders(deliveryAgentId: string) {
@@ -117,6 +119,8 @@ export class DeliveryService {
                 where: { id: payload.orderId },
                 data: { status: OrderStatus.COMPLETED },
             });
+
+            await this.referralService.settleForOrder(payload.orderId, OrderStatus.COMPLETED, prisma);
 
             await prisma.deliveryAgent.update({
                 where: {

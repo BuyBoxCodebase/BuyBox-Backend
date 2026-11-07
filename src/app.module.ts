@@ -13,6 +13,7 @@ import { DeliveryModule } from './delivery/delivery.module';
 import { AdminModule } from './admin/admin.module';
 import { CategoryModule } from './category/category.module';
 import { CouponModule } from './coupon/coupon.module';
+import { ReferralModule } from './referral/referral.module';
 import { AdsModule } from './ads/ads.module';
 import { SellerModule } from './seller/seller.module';
 import { DeliveryAgentModule } from './delivery-agent/delivery-agent.module';
@@ -61,6 +62,7 @@ import { ErrorLogModule, logError } from '../libs/common/src';
     OrderModule,
     InventoryModule,
     CouponModule,
+    ReferralModule,
     AdsModule,
     MailerModule,
     AnalyticsModule,

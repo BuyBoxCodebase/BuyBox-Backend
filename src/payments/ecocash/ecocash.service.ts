@@ -50,7 +50,7 @@ export class EcocashService {
     const checkoutData: CreateOrderDto = { ...checkout, paymentMode: 'ECOCASH' };
 
     // Server-side total, with the same stock checks the order will run
-    const amount = await this.orderService.calculateOrderTotal(checkoutData);
+    const amount = await this.orderService.calculateOrderTotal(userId, checkoutData);
     if (!(amount > 0)) throw new BadRequestException('Order total must be more than zero');
 
     const clientCorrelator = `${Date.now()}${randomInt(1000, 10000)}`;
@@ -210,7 +210,7 @@ export class EcocashService {
 
     try {
       // The cart could have changed while the customer was approving the payment
-      const currentTotal = await this.orderService.calculateOrderTotal(checkoutData);
+      const currentTotal = await this.orderService.calculateOrderTotal(payment.userId, checkoutData);
       if (Math.abs(currentTotal - payment.amount) > 0.009) {
         throw new Error(`Order total changed during payment: paid ${payment.amount}, order now ${currentTotal}`);
       }

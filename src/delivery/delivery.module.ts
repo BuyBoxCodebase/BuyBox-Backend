@@ -8,6 +8,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventsModule } from '../events/events.module';
 import { WhatsAppModule } from '../whatsapp/whatsapp.module';
+import { ReferralModule } from '../referral/referral.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { WhatsAppModule } from '../whatsapp/whatsapp.module';
     }),
     EventsModule,
     WhatsAppModule,
+    ReferralModule,
   ],
   controllers: [DeliveryController],
   providers: [

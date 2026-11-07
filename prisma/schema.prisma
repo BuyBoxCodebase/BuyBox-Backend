@@ -44,6 +44,8 @@ model Customer {
   orderPreferences  OrderPreference?
   notificationPrefs NotificationPreference?
   conversations     Conversation[]
+  referralCode      ReferralCode?
+  referralsMade     Referral[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -317,6 +319,13 @@ model Order {
   deliveryDistanceKm  Float?
   deliveryCoordinates Json?
 
+  // Set when the customer used a friend's referral code at checkout
+  referralCode     String?
+  referralDiscount Float?
+  // Referral earnings spent on this order. A cancelled or out-of-stock order stops counting
+  // towards what the customer has spent, which is what gives the credit back.
+  creditUsed       Float?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -403,6 +412,46 @@ model CustomerCoupon {
   used       Boolean   @default(false)
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
+}
+
+// In its own collection, not a field on Customer: a unique index on an optional Mongo
+// field rejects a second customer without a value, and existing customers have none.
+// Created the first time a customer opens their referrals.
+model ReferralCode {
+  id              String    @id @default(auto()) @map("_id") @db.ObjectId
+  customerId      String    @unique @db.ObjectId
+  customer        Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  code            String    @unique
+  // Written whenever credit is spent, so two orders spending at once hit a write
+  // conflict and one fails, rather than both spending the same balance
+  lastCreditUseAt DateTime?
+  createdAt       DateTime  @default(now())
+}
+
+enum ReferralStatus {
+  PENDING  // Friend's order is placed but not completed
+  EARNED   // Friend's order was completed
+  REVERSED // Friend's order was cancelled or out of stock; the friend can use a code again
+}
+
+// One per referred customer: unique on referredCustomerId, so a customer can only ever
+// count once. A REVERSED row is overwritten when they use a code again.
+model Referral {
+  id                 String         @id @default(auto()) @map("_id") @db.ObjectId
+  referrerId         String         @db.ObjectId
+  referrer           Customer       @relation(fields: [referrerId], references: [id], onDelete: Cascade)
+  referredCustomerId String         @unique @db.ObjectId
+  // First name only, shown in the referrer's list
+  referredName       String
+  orderId            String         @unique @db.ObjectId
+  code               String
+  discountAmount     Float
+  rewardAmount       Float
+  status             ReferralStatus @default(PENDING)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@index([referrerId])
 }
 
 model OrderPreference {
