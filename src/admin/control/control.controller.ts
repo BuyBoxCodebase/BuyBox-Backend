@@ -13,7 +13,7 @@ import { GetUser, Roles, RolesGuard } from '../../../libs/common/src';
 
 @Controller('admin/control')
 export class AdminControlController {
-  constructor(private readonly adminControlService: AdminControlService) {}
+  constructor(private readonly adminControlService: AdminControlService) { }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('SUPER_ADMIN')
@@ -48,6 +48,13 @@ export class AdminControlController {
   @Get('/get/orders')
   getOrders(@Query('page') page = 1, @Query('limit') limit = 10) {
     return this.adminControlService.getAllOrders(+page, +limit);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN', 'SUPER_ADMIN')
+  @Get('/dashboard')
+  getDashboard(@Query('start') start: string, @Query('end') end: string) {
+    return this.adminControlService.getDashboard(start, end);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

@@ -245,7 +245,7 @@ export class ProductService {
         if (generatedVariants && generatedVariants.length > 0) {
           for (let i = 0; i < generatedVariants.length; i++) {
             const gv = generatedVariants[i];
-            
+
             const optionValueIdsToConnect = gv.options.map(opt => {
               const optionRecord = newProduct.options.find(o => o.name === opt.optionName);
               if (!optionRecord) return null;
@@ -312,7 +312,7 @@ export class ProductService {
         return newProduct;
       }, {
         maxWait: 5000,
-        timeout: 30000,
+        timeout: 60000,
       });
 
       await this.searchIndexer.reindexProduct(result.id);
@@ -421,7 +421,7 @@ export class ProductService {
         };
       }, {
         maxWait: 5000,
-        timeout: 30000,
+        timeout: 60000,
       });
       await this.searchIndexer.reindexProduct(productId);
       return created;
