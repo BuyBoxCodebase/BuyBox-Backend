@@ -48,8 +48,9 @@ export class AdminControlService {
       totalSellers,
       newSellers,
       prevNewSellers,
-      pendingInRange,
-      pendingTotal,
+      totalCustomers,
+      newCustomers,
+      prevNewCustomers,
       recent,
     ] = await Promise.all([
       this.prisma.order.findMany({
@@ -65,10 +66,9 @@ export class AdminControlService {
       this.prisma.seller.count(),
       this.prisma.seller.count({ where: { createdAt: inRange } }),
       this.prisma.seller.count({ where: { createdAt: inPrevRange } }),
-      this.prisma.order.count({
-        where: { status: OrderStatus.PENDING, createdAt: inRange },
-      }),
-      this.prisma.order.count({ where: { status: OrderStatus.PENDING } }),
+      this.prisma.customer.count(),
+      this.prisma.customer.count({ where: { createdAt: inRange } }),
+      this.prisma.customer.count({ where: { createdAt: inPrevRange } }),
       this.prisma.order.findMany({
         where: { status: OrderStatus.COMPLETED, createdAt: inRange },
         orderBy: { createdAt: 'desc' },
@@ -137,7 +137,7 @@ export class AdminControlService {
       },
       orders: { value: orders, previous: prevOrders },
       sellers: { total: totalSellers, new: newSellers, previousNew: prevNewSellers },
-      pendingOrders: { inRange: pendingInRange, total: pendingTotal },
+      customers: { total: totalCustomers, new: newCustomers, previousNew: prevNewCustomers },
       chart: {
         bucket,
         points: [...points.values()].map((p) => ({ ...p, gmv: round(p.gmv) })),

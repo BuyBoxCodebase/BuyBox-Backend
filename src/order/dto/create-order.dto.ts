@@ -28,6 +28,7 @@ export class CreateOrderDto {
     deliveryCoordinates?: Coordinates;
     // The delivery address as separate fields, saved so the next checkout can prefill it
     deliveryAddress?: DeliveryAddress;
+    deliveryCity?: string;
     // A friend's referral code; re-checked and priced on the server
     referralCode?: string;
     // Referral earnings to spend on the products, in dollars. An exact amount rather than

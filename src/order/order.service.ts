@@ -10,6 +10,14 @@ import { revalidateFrontendCache, FrontendApp, CacheTag, logError, safely } from
 import { DeliveryPricingService } from '../delivery-pricing/delivery-pricing.service';
 import { ReferralService } from '../referral/referral.service';
 
+const CITY_MARKUPS: Record<string, number> = { mutare: 0, harare: 5, bulawayo: 10 };
+
+function resolveCity(value?: string): { city: string; markup: number } {
+  const key = value?.trim().toLowerCase() ?? '';
+  const city = key in CITY_MARKUPS ? key : 'harare';
+  return { city, markup: CITY_MARKUPS[city] };
+}
+
 @Injectable()
 export class OrderService {
   constructor(
@@ -23,12 +31,14 @@ export class OrderService {
   ) { }
 
   async createOrder(userId: string, createOrderDto: CreateOrderDto) {
-    const { email, address, phoneNumber, paymentMode, products, cartId, fulfillmentType, pickupLocationId, pickupDate, deliveryCoordinates, referralCode, creditAmount } = createOrderDto;
+    const { email, address, phoneNumber, paymentMode, products, cartId, fulfillmentType, pickupLocationId, pickupDate, deliveryCoordinates, deliveryCity, referralCode, creditAmount } = createOrderDto;
     const method = fulfillmentType || 'DELIVERY';
+    const { city, markup: cityMarkup } = resolveCity(deliveryCity);
 
     const order = await this.prisma.$transaction(
       async (prisma) => {
         let totalAmount = 0;
+        let totalUnits = 0;
         const orderProductsData = [];
 
         if (cartId) {
@@ -49,6 +59,7 @@ export class OrderService {
           }
 
           totalAmount = cart.products.reduce((sum, item) => sum + item.totalPrice, 0);
+          totalUnits = cart.products.reduce((sum, item) => sum + item.quantity, 0);
 
           // Process each cart item based on whether it has a variant or not
           for (const item of cart.products) {
@@ -185,6 +196,7 @@ export class OrderService {
 
           const itemTotalPrice = itemPrice * quantity;
           totalAmount = itemTotalPrice;
+          totalUnits = quantity;
 
           orderProductsData.push({
             productId: productId,
@@ -196,11 +208,10 @@ export class OrderService {
           throw new Error("Either cartId or products must be provided");
         }
 
-        // totalAmount is still products only here, which is what the referral 10% applies to
+        totalAmount = Math.round((totalAmount + cityMarkup * totalUnits) * 100) / 100;
         const referral = await this.referralService.price(userId, referralCode, totalAmount, prisma);
         const creditUsed = await this.referralService.spendCredit(userId, creditAmount, totalAmount - (referral?.discount ?? 0), prisma);
 
-        // Delivery fees are always recalculated here; any amount the client shows is display-only
         const quote = await this.deliveryPricingService.quote({
           productIds: orderProductsData.map((item) => item.productId),
           method,
@@ -208,7 +219,7 @@ export class OrderService {
           customerCoordinates: deliveryCoordinates,
         });
         // Rounded the same way as calculateOrderTotal, which sets what EcoCash charges
-        totalAmount = Math.round((totalAmount + quote.totalFee - (referral?.discount ?? 0) - creditUsed) * 100) / 100;
+        totalAmount = Math.round((totalAmount - (referral?.discount ?? 0) - creditUsed) * 100) / 100;
 
         const order = await prisma.order.create({
           data: {
@@ -221,10 +232,12 @@ export class OrderService {
             fulfillmentType: method,
             pickupLocationId: quote.hubId,
             pickupDate: pickupDate ? new Date(pickupDate) : undefined,
-            transferFee: quote.transferFee,
-            transferLegs: quote.transferLegs.map((leg) => ({ originHubId: leg.originHubId, fee: leg.fee })),
-            handlingFee: quote.handlingFee,
-            deliveryFee: quote.deliveryFee,
+            transferFee: 0,
+            transferLegs: quote.transferLegs.map((leg) => ({ originHubId: leg.originHubId, fee: 0 })),
+            handlingFee: 0,
+            deliveryFee: 0,
+            deliveryCity: city,
+            cityMarkupPerUnit: cityMarkup,
             deliveryDistanceKm: quote.deliveryDistanceKm,
             deliveryCoordinates: method === 'DELIVERY'
               ? { latitude: deliveryCoordinates.latitude, longitude: deliveryCoordinates.longitude }
@@ -275,10 +288,10 @@ export class OrderService {
     try {
       const sellerProductsMap = new Map<string, { user: any, products: any[] }>();
       const allProducts = [];
-      
+
       for (const item of order.products) {
         if (!item.product) continue;
-        
+
         const seller = item.product.seller;
         const productDetails = {
           name: item.product.name,
@@ -286,7 +299,7 @@ export class OrderService {
           price: item.totalPrice,
         };
         allProducts.push(productDetails);
-        
+
         if (seller && seller.email) {
           if (!sellerProductsMap.has(seller.id)) {
             sellerProductsMap.set(seller.id, { user: seller, products: [] });
@@ -345,7 +358,7 @@ export class OrderService {
     return order;
   }
   async calculateOrderTotal(userId: string, createOrderDto: CreateOrderDto): Promise<number> {
-    const { cartId, products, fulfillmentType, pickupLocationId, deliveryCoordinates, referralCode, creditAmount } = createOrderDto;
+    const { cartId, products, fulfillmentType, pickupLocationId, deliveryCoordinates, deliveryCity, referralCode, creditAmount } = createOrderDto;
     const lines: { productId: string; variantId?: string; quantity: number; totalPrice: number }[] = [];
 
     if (cartId) {
@@ -382,19 +395,19 @@ export class OrderService {
       }
     }
 
-    const quote = await this.deliveryPricingService.quote({
+    await this.deliveryPricingService.quote({
       productIds: lines.map((line) => line.productId),
       method: fulfillmentType || 'DELIVERY',
       hubId: pickupLocationId,
       customerCoordinates: deliveryCoordinates,
     });
 
-    const productsTotal = lines.reduce((sum, line) => sum + line.totalPrice, 0);
+    const units = lines.reduce((sum, line) => sum + line.quantity, 0);
+    const productsTotal = Math.round((lines.reduce((sum, line) => sum + line.totalPrice, 0) + resolveCity(deliveryCity).markup * units) * 100) / 100;
     const referral = await this.referralService.price(userId, referralCode, productsTotal);
     const productsDue = productsTotal - (referral?.discount ?? 0);
     const credit = await this.referralService.checkCredit(userId, creditAmount, productsDue);
-    const total = productsDue + quote.totalFee - credit;
-    return Math.round(total * 100) / 100;
+    return Math.round((productsDue - credit) * 100) / 100;
   }
 
   // One saved set of checkout details per customer, overwritten on every order

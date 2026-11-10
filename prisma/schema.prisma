@@ -319,6 +319,9 @@ model Order {
   deliveryDistanceKm  Float?
   deliveryCoordinates Json?
 
+  deliveryCity      String?
+  cityMarkupPerUnit Float?
+
   // Set when the customer used a friend's referral code at checkout
   referralCode     String?
   referralDiscount Float?
