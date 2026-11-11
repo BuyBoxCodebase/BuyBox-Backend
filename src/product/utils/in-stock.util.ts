@@ -1,11 +1,19 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, VariantApprovalStatus } from '@prisma/client';
 
-// Customer-facing listings no longer serve out-of-stock products.
-// A product is in stock when its own inventory or any of its variants' inventory has quantity > 0
-// (variant inventory rows aren't linked to the product directly, so both paths are checked).
+
+export const APPROVED_VARIANT_WHERE: Prisma.ProductVariantWhereInput = {
+  approvalStatus: VariantApprovalStatus.APPROVED,
+};
+
+export const APPROVED_VARIANTS_FILTER = { where: APPROVED_VARIANT_WHERE } as const;
+
+export const APPROVED_DEFAULT_VARIANT_ARGS = {
+  where: APPROVED_VARIANT_WHERE,
+  orderBy: { isDefault: 'desc' },
+  take: 1,
+} as const;
+
+
 export const IN_STOCK_PRODUCT_WHERE: Prisma.ProductWhereInput = {
-  OR: [
-    { inventory: { some: { quantity: { gt: 0 } } } },
-    { variants: { some: { inventory: { some: { quantity: { gt: 0 } } } } } },
-  ],
+  variants: { some: { ...APPROVED_VARIANT_WHERE, inventory: { some: { quantity: { gt: 0 } } } } },
 };

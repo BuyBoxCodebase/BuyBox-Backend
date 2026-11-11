@@ -28,6 +28,7 @@ export interface VariantRow {
   price: number;
   isDefault: boolean;
   images: string[];
+  approvalStatus?: string; // only 'APPROVED' variants are indexed
 }
 
 export interface InventoryRow {

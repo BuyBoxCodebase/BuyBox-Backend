@@ -93,6 +93,17 @@ export class ProductController {
     return await this.productService.getProductVariants(id, optionFilters);
   }
 
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("SELLER")
+  @Get('/seller/variants/:id')
+  async getSellerProductVariants(
+    @GetUser('userId') userId: string,
+    @Param('id') id: string,
+  ) {
+    return await this.productService.getProductVariants(id, undefined, userId);
+  }
+
   @Get('/option/:id')
   getProductOptionValues(@Param('id') productId: string) {
     return this.productService.getOptionValues(productId);

@@ -126,7 +126,8 @@ async function loadProductData(models: SearchModels, productIds: Types.ObjectId[
   const [categories, subCategories, variants] = await Promise.all([
     models.Category.find({ _id: { $in: categoryIds } }, { name: 1 }).lean(),
     models.SubCategory.find({ _id: { $in: subCategoryIds } }, { name: 1 }).lean(),
-    models.ProductVariant.find({ productId: { $in: products.map((p) => p._id) } }).lean(),
+    // Unapproved variants are never searchable; a product with none approved drops out of the index.
+    models.ProductVariant.find({ productId: { $in: products.map((p) => p._id) }, approvalStatus: 'APPROVED' }).lean(),
   ]);
 
   const variantIds = variants.map((v) => v._id);

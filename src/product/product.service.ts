@@ -1,4 +1,4 @@
-import { Prisma } from '@prisma/client';
+import { Prisma, VariantApprovalStatus } from '@prisma/client';
 import { BadRequestException, Injectable, InternalServerErrorException, NotFoundException } from '@nestjs/common';
 import { CloudinaryService } from '../../src/cloudinary/cloudinary.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
@@ -8,7 +8,7 @@ import { CreateVariantDto } from './dto/create-variant.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
 import { revalidateFrontendCache, FrontendApp, CacheTag, logError, isClientError } from '../../libs/common/src';
 import { generateSearchTags } from './utils/search-tags.util';
-import { IN_STOCK_PRODUCT_WHERE } from './utils/in-stock.util';
+import { APPROVED_DEFAULT_VARIANT_ARGS, APPROVED_VARIANT_WHERE, IN_STOCK_PRODUCT_WHERE } from './utils/in-stock.util';
 import { SearchIndexer } from '../search/index/search-indexer.service';
 
 function assertValidDescription(description: string | undefined) {
@@ -319,7 +319,7 @@ export class ProductService {
       await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
       return {
         success: true,
-        message: "New Product Added with Default Variant",
+        message: "New product added. Its variants will be listed once an admin approves them.",
         productId: result.id
       };
     } catch (error) {
@@ -416,7 +416,7 @@ export class ProductService {
         await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
         return {
           success: true,
-          message: "Variant created successfully",
+          message: "Variant submitted for admin approval. It will be listed once approved.",
           variantId: variant.id
         };
       }, {
@@ -465,6 +465,11 @@ export class ProductService {
       };
     }
 
+    // Editing what customers see (name, description, images, options) sends the variant back for admin review.
+    // Price, stock and the default flag take effect immediately.
+    const contentChanged =
+      !!name || !!description || !!images || (!!optionValueIds && optionValueIds.length > 0);
+
     try {
       const updated = await this.prisma.$transaction(async (tx) => {
         // If this is set as default, un-set any existing default variant
@@ -489,7 +494,13 @@ export class ProductService {
             ...(description && { description }),
             ...(price !== undefined && { price: parseFloat(price) }),
             ...(isDefault !== undefined && { isDefault }),
-            ...(images && { images })
+            ...(images && { images }),
+            ...(contentChanged && {
+              approvalStatus: VariantApprovalStatus.PENDING,
+              rejectionReason: null,
+              reviewedAt: null,
+              reviewedById: null,
+            }),
           }
         });
 
@@ -543,7 +554,9 @@ export class ProductService {
         await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
         return {
           success: true,
-          message: "Variant updated successfully"
+          message: contentChanged
+            ? "Variant updated and sent for admin re-approval"
+            : "Variant updated successfully"
         };
       });
       await this.searchIndexer.reindexProduct(variant.productId);
@@ -665,6 +678,7 @@ export class ProductService {
             }
           },
           variants: {
+            where: APPROVED_VARIANT_WHERE,
             include: {
               inventory: true,
               options: {
@@ -744,6 +758,7 @@ export class ProductService {
       return groupedProducts;
     }
     catch (err) {
+      await logError(err, { context: 'ProductService.getProducts' });
       throw new InternalServerErrorException('Failed to get products', { cause: err });
     }
   }
@@ -767,6 +782,7 @@ export class ProductService {
             }
           },
           variants: {
+            where: APPROVED_VARIANT_WHERE,
             include: {
               inventory: true,
               options: {
@@ -838,6 +854,7 @@ export class ProductService {
       };
     }
     catch (err) {
+      await logError(err, { context: 'ProductService.getProductsBySubcategory' });
       throw new InternalServerErrorException('Failed to get products by subcategory', { cause: err });
     }
   }
@@ -931,6 +948,7 @@ export class ProductService {
           }
         },
         variants: {
+          where: APPROVED_VARIANT_WHERE,
           select: {
             id: true,
             name: true,
@@ -963,7 +981,8 @@ export class ProductService {
       },
     });
 
-    if (!product) {
+    // The base product is only listed while at least one of its variants is approved
+    if (!product || product.variants.length === 0) {
       throw new NotFoundException('Product not found');
     }
 
@@ -976,9 +995,10 @@ export class ProductService {
   }
 
   async getProductVariantById(variantId: string) {
-    const variant = await this.prisma.productVariant.findUnique({
+    const variant = await this.prisma.productVariant.findFirst({
       where: {
-        id: variantId
+        id: variantId,
+        ...APPROVED_VARIANT_WHERE,
       },
       include: {
         product: {
@@ -998,6 +1018,7 @@ export class ProductService {
               }
             },
             variants: {
+              where: APPROVED_VARIANT_WHERE,
               include: {
                 inventory: {
                   select: {
@@ -1094,13 +1115,17 @@ export class ProductService {
     };
   }
 
-  async getProductVariants(productId: string, optionFilters?: Record<string, string>) {
-    const product = await this.prisma.product.findUnique({
+  // Customers only see approved variants. When `sellerId` is passed (seller dashboard), the product must belong
+  // to that seller and every variant is returned together with its approval status.
+  async getProductVariants(productId: string, optionFilters?: Record<string, string>, sellerId?: string) {
+    const product = await this.prisma.product.findFirst({
       where: {
-        id: productId
+        id: productId,
+        ...(sellerId ? { sellerId } : {}),
       },
       include: {
         variants: {
+          ...(sellerId ? {} : { where: APPROVED_VARIANT_WHERE }),
           include: {
             inventory: {
               select: {
@@ -1486,7 +1511,7 @@ export class ProductService {
         category: true,
         subCategory: true,
         variants: {
-          where: { isDefault: true },
+          ...APPROVED_DEFAULT_VARIANT_ARGS,
           include: {
             inventory: true
           }
@@ -1524,7 +1549,7 @@ export class ProductService {
         category: true,
         subCategory: true,
         variants: {
-          where: { isDefault: true },
+          ...APPROVED_DEFAULT_VARIANT_ARGS,
           include: { inventory: true },
         },
         inventory: true,

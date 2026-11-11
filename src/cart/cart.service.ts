@@ -56,6 +56,10 @@ export class CartService {
             throw new Error(`Variant with ID ${variantId} not found`);
           }
 
+          if (fetchedVariant.approvalStatus !== 'APPROVED') {
+            throw new Error(`Variant ${variantId} is not available`);
+          }
+
           if (fetchedVariant.productId !== productId) {
             throw new Error(`Variant ${variantId} does not belong to product ${productId}`);
           }

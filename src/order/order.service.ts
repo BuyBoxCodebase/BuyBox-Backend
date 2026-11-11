@@ -64,6 +64,10 @@ export class OrderService {
           // Process each cart item based on whether it has a variant or not
           for (const item of cart.products) {
             if (item.variantId) {
+              // A variant that was un-approved after being carted can't be ordered
+              if (item.variant && item.variant.approvalStatus !== 'APPROVED') {
+                throw new Error(`Variant ${item.variantId} is no longer available`);
+              }
               // Handle variant products
               const inventory = await prisma.inventory.findFirst({
                 where: { variantId: item.variantId },
@@ -146,6 +150,10 @@ export class OrderService {
 
             if (variant.productId !== productId) {
               throw new Error(`Variant ${variantId} does not belong to product ${productId}`);
+            }
+
+            if (variant.approvalStatus !== 'APPROVED') {
+              throw new Error(`Variant ${variantId} is not available`);
             }
 
             const inventory = await prisma.inventory.findFirst({
@@ -376,7 +384,7 @@ export class OrderService {
       let itemPrice = product.basePrice;
       if (variantId) {
         const variant = await this.prisma.productVariant.findUnique({ where: { id: variantId } });
-        if (!variant || variant.productId !== productId) {
+        if (!variant || variant.productId !== productId || variant.approvalStatus !== 'APPROVED') {
           throw new BadRequestException(`Variant ${variantId} not found for product ${productId}`);
         }
         itemPrice = variant.price;

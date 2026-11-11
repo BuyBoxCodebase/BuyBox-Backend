@@ -204,6 +204,12 @@ model VariantOption {
   @@unique([variantId, optionValueId])
 }
 
+enum VariantApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
 model ProductVariant {
   id          String          @id @default(auto()) @map("_id") @db.ObjectId
   productId   String          @db.ObjectId
@@ -218,8 +224,15 @@ model ProductVariant {
   cartItems   CartItem[]
   orderItems  OrderProduct[]
 
+  approvalStatus  VariantApprovalStatus @default(PENDING)
+  rejectionReason String?
+  reviewedAt      DateTime?
+  reviewedById    String?               @db.ObjectId
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([approvalStatus])
 }
 
 model Inventory {
