@@ -1,30 +1,19 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { z } from 'zod';
-import { CatalogVocabulary } from '../../search/catalog/catalog-vocabulary.service';
 import { SearchService } from '../../search/search.service';
-import { GENDERS, SORT_OPTIONS, SearchFilters, SearchProduct, SearchResponse, SortOption } from '../../search/search.types';
+import { SearchProduct, SearchResponse } from '../../search/search.types';
 
 const PAGE_SIZE = 8;
 
 const SearchProductsSchema = z.object({
-  query: z.string().optional().describe(
-    'What the customer wants in their own words, minus anything that has its own field. ' +
-      'E.g. "comfortable for standing all day", "air force 1", "clean for a wedding", "waterproof trail". ' +
-      'Omit when the customer only gave filters.',
-  ),
-  brand: z.string().optional().describe('Brand the customer named, e.g. "Nike". Never infer one.'),
-  category: z.string().optional().describe('Type or sport the customer named, e.g. "Running", "Basketball", "Sneakers".'),
-  colour: z.string().optional().describe('One colour word, e.g. "black".'),
-  size: z.string().optional().describe('Size the customer stated, e.g. "9", "9.5", "XL".'),
-  minPrice: z.number().optional().describe('Set for "over", "above", "more than" a price.'),
-  maxPrice: z.number().optional().describe('Set for "under", "below", "up to", "less than" a price.'),
-  gender: z.enum(GENDERS).optional().describe('Only when the customer stated it. Never infer it.'),
-  sort: z.enum(SORT_OPTIONS).optional().describe(
-    '"price_low_to_high" for cheapest/budget, "price_high_to_low" for premium, "newest" for latest. Omit for best match.',
+  query: z.string().describe(
+    'Everything the customer is looking for, in their own words, including brand, colour, size, price and gender ' +
+    'when they said them. E.g. "black nike running shoes size 9 under $80", "air jordan 4", "something clean for a wedding". ' +
+    'Never add a word the customer did not say.',
   ),
   showMore: z.boolean().optional().describe(
     'true only when the customer wants more or different options for the same search ("show me more", "any others?"). ' +
-      'Products already shown are left out.',
+    'Products already shown are left out.',
   ),
 });
 
@@ -33,8 +22,6 @@ type SearchProductsArgs = z.infer<typeof SearchProductsSchema>;
 // What Lino remembers about its last search in a conversation (stored as LinoConversation.lastIntent).
 export interface LinoSearchState {
   query: string;
-  filters: SearchFilters;
-  sort: SortOption;
   shownIds: string[];
 }
 
@@ -54,10 +41,7 @@ export class ToolsService implements OnModuleInit {
   private readonly logger = new Logger(ToolsService.name);
   private ai: any;
 
-  constructor(
-    private readonly searchService: SearchService,
-    private readonly vocabulary: CatalogVocabulary,
-  ) {}
+  constructor(private readonly searchService: SearchService) { }
 
   async onModuleInit() {
     this.ai = await eval(`import('ai')`);
@@ -70,7 +54,7 @@ export class ToolsService implements OnModuleInit {
     return {
       search_products: tool({
         description: `Search the in-stock catalog, 8 products at a time.
-Put what the customer wants in "query" and use the other fields only for things the customer actually said.
+Put everything the customer asked for in "query", in their own words. Filters such as brand, colour, size and price are read from the text.
 If nothing matches every filter, the search relaxes filters by itself and reports them in "loosened".`,
         inputSchema: SearchProductsSchema,
         execute: async (args: SearchProductsArgs) => {
@@ -82,14 +66,19 @@ If nothing matches every filter, the search relaxes filters by itself and report
   }
 
   private async search(args: SearchProductsArgs, context: ToolContext) {
-    const { filters, unknownText } = await this.vocabulary.resolveFilters(args);
-    const text = [args.query, ...unknownText].filter(Boolean).join(' ').trim();
-    const sort = args.sort ?? 'relevance';
-    const excludeIds = args.showMore ? context.lastSearch?.shownIds ?? [] : [];
+    const showMore = args.showMore === true && context.lastSearch !== null;
+    const query = args.query?.trim() || (showMore ? context.lastSearch.query : '');
+    const excludeIds = showMore ? context.lastSearch.shownIds : [];
 
-    const response = await this.searchService.search({ text, filters, sort, page: 1, pageSize: PAGE_SIZE, excludeIds });
+    const response = await this.searchService.searchText({
+      q: query,
+      filters: {},
+      page: 1,
+      pageSize: PAGE_SIZE,
+      excludeIds,
+    });
 
-    context.onSearch({ query: text, filters, sort, shownIds: [...excludeIds, ...response.products.map((p) => p.id)] });
+    context.onSearch({ query, shownIds: [...excludeIds, ...response.products.map((p) => p.id)] });
     return toToolResult(response);
   }
 }

@@ -30,6 +30,7 @@ export interface TextSearchInput {
   sort?: SortOption;
   page: number;
   pageSize: number;
+  excludeIds?: string[];
 }
 
 // The one product search. The navbar (via SearchController) and Lino (via its search tool) both use it.
@@ -40,7 +41,7 @@ export class SearchService {
   constructor(
     private readonly retriever: Retriever,
     private readonly vocabulary: CatalogVocabulary,
-  ) {}
+  ) { }
 
   // Navbar: reads filters out of the text, then searches. Filters chosen on the page win over the text.
   async searchText(input: TextSearchInput): Promise<SearchResponse> {
@@ -55,6 +56,7 @@ export class SearchService {
       sort: input.sort ?? parsed.sort ?? 'relevance',
       page: input.page,
       pageSize: input.pageSize,
+      excludeIds: input.excludeIds,
     });
   }
 
@@ -99,11 +101,11 @@ export class SearchService {
       sort: request.sort,
       relaxed: relaxed
         ? {
-            droppedFilters: attempt.droppedFilters,
-            widenedPrice: attempt.widenedPrice
-              ? { minPrice: attempt.filters.minPrice, maxPrice: attempt.filters.maxPrice }
-              : null,
-          }
+          droppedFilters: attempt.droppedFilters,
+          widenedPrice: attempt.widenedPrice
+            ? { minPrice: attempt.filters.minPrice, maxPrice: attempt.filters.maxPrice }
+            : null,
+        }
         : null,
       products: sorted.slice(start, start + request.pageSize).map(toSearchProduct),
       facets: buildFacets(matches),
@@ -116,7 +118,7 @@ export class SearchService {
 
     this.logger.log(
       `search text="${request.text}" filters=${JSON.stringify(request.filters)} → ${response.total} results` +
-        `${relaxed ? ` (loosened: ${attempt.droppedFilters.join(', ') || 'price'})` : ''} in ${response.tookMs}ms`,
+      `${relaxed ? ` (loosened: ${attempt.droppedFilters.join(', ') || 'price'})` : ''} in ${response.tookMs}ms`,
     );
     return response;
   }

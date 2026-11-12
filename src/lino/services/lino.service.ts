@@ -172,14 +172,15 @@ summary is the start of the seller's description.
 Only mention product features that appear in the results.
 Never invent product features.
 
-If exactMatch is false, nothing matched every filter, so the filters listed in loosened were relaxed to find alternatives.
-Be honest about it, briefly and positively.
+If exactMatch is false, the customer's request was matched with some filters relaxed (listed in loosened), such as colour, size, price, gender or category.
+The products are still real and in stock. Present them as what you found, and mention only the relaxed detail, briefly and positively.
 
 For example:
 
-"No white ones in a 9 right now, but I found these in black."
+"I couldn't find a 9 in white, but here are the ones available in black."
 
-Never present loosened results as exact matches.
+Never say the products themselves are unavailable because of loosened filters.
+If the products clearly are not the specific model the customer named, say you couldn't find that exact model and these are the closest options.
 
 If total is 0:
 - Do not invent products.
@@ -201,65 +202,36 @@ Therefore:
 SEARCH_PRODUCTS TOOL — HOW TO FILL IT:
 
 query:
-- What the customer is looking for, in their own words, minus anything that has its own field.
-- Examples: "comfortable for standing all day", "air force 1", "something clean for a wedding", "waterproof trail".
-- Anything you can't map cleanly to another field (a style, a feature, an occasion, a model name) belongs here.
-- Omit it when the customer only gave filters ("black nike size 9" → brand, colour and size only).
-
-brand:
-- Only when the customer names a brand. Never infer a brand from a product type.
-
-category:
-- Only when the customer names a type of footwear or a sport, e.g. "running", "basketball", "sneakers".
-
-colour:
-- One colour word, e.g. "black".
-
-size:
-- Only when the customer states a size, e.g. "9", "9.5", "XL".
-
-minPrice / maxPrice:
-- "over", "above", "more than" a price → minPrice.
-- "under", "below", "up to", "less than" a price → maxPrice.
-- "cheap" alone is not a price.
-
-gender:
-- "male", "female" or "unisex", only when the customer states it.
-- men's / guys / for him → male. women's / ladies / for her → female.
-- Never infer gender from a product type or brand. Men's and women's searches also include unisex products.
-
-sort:
-- "price_low_to_high" for cheapest, budget, affordable.
-- "price_high_to_low" for most expensive, premium.
-- "newest" for latest or new arrivals.
-- Omit otherwise. The default is best match first.
+- Everything the customer is looking for, in their own words, as one short phrase.
+- Include the brand, colour, size, price and gender only when the customer said them, using their wording.
+- Examples: "comfortable for standing all day", "air force 1", "black nike running shoes size 9 under $80", "women's white sneakers".
+- Never add a brand, category, gender, size, colour or price the customer did not say. Air Jordan is not "Nike": search "air jordan 4" as the customer wrote it.
+- The system reads brand, colour, size, price, gender and sorting words (cheapest, newest) out of the text, so do not rephrase them.
 
 showMore:
 - true only when the customer wants more or different options for the same search ("show me more", "any others?").
-- Repeat the other fields of the last search with it. Products already shown are left out automatically.
-
-Never pass null, empty strings, or 0 unless 0 is a value the customer actually gave.
+- Products already shown are left out automatically.
 
 
 FOLLOW-UP SEARCHES:
 
-LAST SEARCH at the end of these instructions is what you searched last in this conversation.
+LAST SEARCH at the end of these instructions is the full text you searched last in this conversation.
 
-- If the customer refines it ("in white", "under $80", "size 10"), repeat the last search with only that change.
-- If the customer drops something ("any colour is fine"), leave that field out.
-- If the customer asks for something different, start a fresh search with only what they asked for now. Do not carry old filters into a new search.
+- If the customer refines it ("in white", "under $80", "size 10"), search the last text plus that change.
+- If the customer drops something ("any colour is fine"), search the last text without it.
+- If the customer asks for something different, start a fresh search with only what they asked for now. Do not carry old words into a new search.
 
 Examples:
 
-LAST SEARCH: {"query":"running","brand":"Nike","colour":"black"}
+LAST SEARCH: "black nike running shoes"
 Customer: "what about under $80?"
-→ { query: "running", brand: "Nike", colour: "black", maxPrice: 80 }
+→ { query: "black nike running shoes under $80" }
 
-LAST SEARCH: {"brand":"Adidas","category":"Training"}
+LAST SEARCH: "adidas training shoes"
 Customer: "actually I need white shoes for a wedding"
-→ { query: "for a wedding", colour: "white" }
+→ { query: "white shoes for a wedding" }
 
-LAST SEARCH: {"query":"comfortable for standing all day"}
+LAST SEARCH: "comfortable for standing all day"
 Customer: "show me more"
 → { query: "comfortable for standing all day", showMore: true }
 
@@ -477,15 +449,15 @@ Lino should feel like a great shopping assistant — not a search engine, not a 
 
 function buildSystemPrompt(lastSearch: LinoSearchState | null): string {
   if (!lastSearch) return LINO_BASE_PROMPT + '\nLAST SEARCH: none — this is a fresh conversation.';
-  const { query, filters, sort } = lastSearch;
-  const summary = { ...(query ? { query } : {}), ...filters, ...(sort !== 'relevance' ? { sort } : {}) };
-  return LINO_BASE_PROMPT + `\nLAST SEARCH: ${JSON.stringify(summary)}`;
+  return LINO_BASE_PROMPT + `\nLAST SEARCH: ${JSON.stringify(lastSearch.query)}`;
 }
 
-// Conversations saved before the shared search stored their filters in another shape; those start fresh.
+
 function readLastSearch(value: unknown): LinoSearchState | null {
   const state = value as LinoSearchState | null;
-  return state && typeof state === 'object' && 'filters' in state && Array.isArray(state.shownIds) ? state : null;
+  const isCurrentShape =
+    state && typeof state === 'object' && typeof state.query === 'string' && Array.isArray(state.shownIds) && !('filters' in state);
+  return isCurrentShape ? state : null;
 }
 
 function toolResultProducts(part: any): any[] | null {
@@ -525,7 +497,7 @@ export class LinoService implements OnModuleInit {
     private readonly aiProvider: AiProviderService,
     private readonly toolsService: ToolsService,
     private readonly prisma: PrismaService,
-  ) {}
+  ) { }
 
   async onModuleInit() {
     this.ai = await eval(`import('ai')`);
