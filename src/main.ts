@@ -1,6 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
-import { logError } from '../libs/common/src';
+import { logError, requestTimingMiddleware } from '../libs/common/src';
 
 process.on('unhandledRejection', async (reason) => {
   await logError(reason, { source: 'process', context: 'unhandledRejection', handled: false });
@@ -26,12 +26,13 @@ const ALLOWED_ORIGINS = [
   "https://www.treides.com",
   "https://sell.treides.com",
   "https://admin.treides.com"
-  ];
+];
 
 const PREVIEW_ORIGIN = /^https:\/\/[a-z0-9-]+\.vercel\.app$/;
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
+  app.use(requestTimingMiddleware);
   app.enableCors({
     origin(origin, callback) {
       // No Origin header: server-to-server, curl, same-origin. Not a CORS request.

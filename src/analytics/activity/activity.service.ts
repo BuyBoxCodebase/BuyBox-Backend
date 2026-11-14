@@ -1,9 +1,11 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { ActivityEventType, Prisma } from '@prisma/client';
+import { ActivityEventType, Prisma, UserEventType } from '@prisma/client';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { normalizeRoute } from './route';
+import { EventsService, LogUserEventInput } from '../../events/events.service';
 
-const MAX_EVENTS_PER_BATCH = 50;
+const MAX_EVENTS_PER_BATCH = 100;
+const MAX_USER_EVENTS_PER_BATCH = 100;
 const MAX_METADATA_CHARS = 2000;
 const MAX_CLOCK_SKEW_MS = 24 * 60 * 60 * 1000;
 
@@ -20,6 +22,13 @@ const CLIENT_EVENT_TYPES = new Set<ActivityEventType>([
   ActivityEventType.CHECKOUT_STARTED,
   ActivityEventType.LOGIN,
   ActivityEventType.LOGOUT,
+]);
+
+
+const SERVER_ONLY_USER_EVENT_TYPES = new Set<UserEventType>([
+  UserEventType.ORDER_COMPLETED,
+  UserEventType.ORDER_CANCELED,
+  UserEventType.ORDER_DELIVERED,
 ]);
 
 export interface ActivityBatchDto {
@@ -39,6 +48,15 @@ export interface ActivityBatchDto {
     title?: string;
     label?: string;
     productId?: string;
+    metadata?: Record<string, unknown>;
+  }[];
+  // Product / category signals (views, add-to-cart, ...) that feed the recommendations
+  userEvents?: {
+    type: UserEventType;
+    ts?: number;
+    productId?: string;
+    categoryId?: string;
+    subCategoryId?: string;
     metadata?: Record<string, unknown>;
   }[];
 }
@@ -61,7 +79,7 @@ function str(value: unknown, max: number): string | undefined {
 
 @Injectable()
 export class ActivityService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private prisma: PrismaService, private readonly eventsService: EventsService) { }
 
   // ─── Ingest ────────────────────────────────────────────────────────────────
 
@@ -72,6 +90,11 @@ export class ActivityService {
     const rawEvents = Array.isArray(dto.events) ? dto.events : [];
     if (rawEvents.length > MAX_EVENTS_PER_BATCH) {
       throw new BadRequestException(`At most ${MAX_EVENTS_PER_BATCH} events per batch`);
+    }
+
+    const rawUserEvents = Array.isArray(dto.userEvents) ? dto.userEvents : [];
+    if (rawUserEvents.length > MAX_USER_EVENTS_PER_BATCH) {
+      throw new BadRequestException(`At most ${MAX_USER_EVENTS_PER_BATCH} userEvents per batch`);
     }
 
     const now = Date.now();
@@ -106,11 +129,53 @@ export class ActivityService {
       });
     }
 
+    const userEvents = this.buildUserEvents(dto, rawUserEvents, customerId, now);
+
     await this.upsertSession(dto, events, customerId, now);
-    if (events.length) {
-      await this.prisma.activityEvent.createMany({ data: events });
+    await Promise.all([
+      events.length ? this.prisma.activityEvent.createMany({ data: events }) : undefined,
+      this.eventsService.logUserEvents(userEvents),
+    ]);
+    return { success: true, accepted: events.length, acceptedUserEvents: userEvents.length };
+  }
+
+  private buildUserEvents(
+    dto: ActivityBatchDto,
+    raw: NonNullable<ActivityBatchDto['userEvents']>,
+    customerId: string | undefined,
+    now: number,
+  ): LogUserEventInput[] {
+    const validTypes = new Set<string>(Object.values(UserEventType));
+    const objectId = (value: unknown) => (typeof value === 'string' && OBJECT_ID_RE.test(value) ? value : undefined);
+    const result: LogUserEventInput[] = [];
+
+    for (const e of raw) {
+      if (!e || !validTypes.has(e.type) || SERVER_ONLY_USER_EVENT_TYPES.has(e.type)) continue;
+
+      let ts = typeof e.ts === 'number' && Number.isFinite(e.ts) ? e.ts : now;
+      if (ts > now || now - ts > MAX_CLOCK_SKEW_MS) ts = now;
+
+      let metadata: Prisma.InputJsonValue | undefined;
+      if (e.metadata && typeof e.metadata === 'object') {
+        const json = JSON.stringify(e.metadata);
+        if (json.length <= MAX_METADATA_CHARS) metadata = JSON.parse(json);
+      }
+
+      result.push({
+        customerId,
+        sessionId: dto.sessionId,
+        type: e.type,
+        productId: objectId(e.productId),
+        categoryId: objectId(e.categoryId),
+        subCategoryId: objectId(e.subCategoryId),
+        device: str(dto.context?.device, 40),
+        platform: str(dto.context?.platform, 40),
+        source: str(dto.context?.referrer, 500),
+        metadata,
+        createdAt: new Date(ts),
+      });
     }
-    return { success: true, accepted: events.length };
+    return result;
   }
 
   private async upsertSession(
@@ -146,7 +211,7 @@ export class ActivityService {
       createdAt: { $ifNull: ['$createdAt', '$$NOW'] },
       updatedAt: '$$NOW',
     };
-    
+
     set.customerId = customerId ? { $oid: customerId } : { $ifNull: ['$customerId', null] };
 
     await this.prisma.$runCommandRaw({
@@ -262,14 +327,14 @@ export class ActivityService {
     const productIds = [...new Set(events.map((e) => e.productId).filter(Boolean))];
     const products = productIds.length
       ? await this.prisma.product.findMany({
-          where: { id: { in: productIds } },
-          select: { id: true, name: true },
-        })
+        where: { id: { in: productIds } },
+        select: { id: true, name: true },
+      })
       : [];
     const productNames = new Map(products.map((p) => [p.id, p.name]));
     const customers = await this.customersById([session.customerId]);
 
-    
+
     const pageViewIdx = events.flatMap((e, i) => (e.type === ActivityEventType.PAGE_VIEW ? [i] : []));
     const timeOnPage = new Map<number, number>();
     pageViewIdx.forEach((idx, n) => {
@@ -305,9 +370,9 @@ export class ActivityService {
     const unique = [...new Set(ids.filter(Boolean))];
     const customers = unique.length
       ? await this.prisma.customer.findMany({
-          where: { id: { in: unique } },
-          select: { id: true, name: true, email: true, profilePic: true },
-        })
+        where: { id: { in: unique } },
+        select: { id: true, name: true, email: true, profilePic: true },
+      })
       : [];
     return new Map(customers.map((c) => [c.id, c]));
   }

@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../customer/auth/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../../libs/common/src';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
+import { parsePaging } from './utils/listing.util';
 
 @Controller('product')
 export class ProductController {
@@ -64,8 +65,20 @@ export class ProductController {
   getProductsBySubcategory(
     @Query('categoryId') categoryId: string,
     @Query('subCategoryName') subCategoryName: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
   ) {
-    return this.productService.getProductsBySubcategory(categoryId, subCategoryName);
+    return this.productService.getProductsBySubcategory(categoryId, subCategoryName, parsePaging(page ?? '1', pageSize)!);
+  }
+
+  @Get('/get-by-category')
+  getProductsByCategory(
+    @Query('categoryId') categoryId: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ) {
+    if (!categoryId) throw new BadRequestException('categoryId is required');
+    return this.productService.getProductsByCategoryPaged(categoryId, parsePaging(page ?? '1', pageSize)!);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

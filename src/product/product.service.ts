@@ -9,6 +9,7 @@ import { UpdateVariantDto } from './dto/update-variant.dto';
 import { revalidateFrontendCache, FrontendApp, CacheTag, logError, isClientError } from '../../libs/common/src';
 import { generateSearchTags } from './utils/search-tags.util';
 import { APPROVED_DEFAULT_VARIANT_ARGS, APPROVED_VARIANT_WHERE, IN_STOCK_PRODUCT_WHERE } from './utils/in-stock.util';
+import { LISTING_INCLUDE, mapListingProducts } from './utils/listing.util';
 import { SearchIndexer } from '../search/index/search-indexer.service';
 
 function assertValidDescription(description: string | undefined) {
@@ -763,7 +764,12 @@ export class ProductService {
     }
   }
 
-  async getProductsBySubcategory(categoryId: string, subCategoryName: string) {
+
+  async getProductsBySubcategory(
+    categoryId: string,
+    subCategoryName: string,
+    paging: { page: number; pageSize: number },
+  ) {
     try {
       const products = await this.prisma.product.findMany({
         where: {
@@ -773,89 +779,47 @@ export class ProductService {
           },
           ...IN_STOCK_PRODUCT_WHERE,
         },
-        include: {
-          category: true,
-          subCategory: true,
-          inventory: {
-            select: {
-              quantity: true,
-            }
-          },
-          variants: {
-            where: APPROVED_VARIANT_WHERE,
-            include: {
-              inventory: true,
-              options: {
-                include: {
-                  optionValue: {
-                    include: {
-                      option: true
-                    }
-                  }
-                }
-              }
-            }
-          }
-        },
-        orderBy: {
-          createdAt: "desc"
-        }
-      });
-
-      const mappedProducts = products.map(product => {
-        const defaultVariant = product.variants.find(v => v.isDefault) || product.variants[0] || null;
-
-        const simplifiedVariants = product.variants.map(variant => {
-          const formattedOptions = variant.options.reduce((acc, opt) => {
-            const optionName = opt.optionValue.option.name;
-            acc[optionName] = {
-              id: opt.optionValueId,
-              value: opt.optionValue.value,
-              optionId: opt.optionValue.optionId
-            };
-            return acc;
-          }, {} as Record<string, { id: string, value: string, optionId: string }>);
-
-          return {
-            id: variant.id,
-            price: variant.price,
-            quantity: variant.inventory && variant.inventory.length > 0 ? variant.inventory[0].quantity : 0,
-            formattedOptions
-          };
-        });
-
-        return {
-          ...product,
-          price: defaultVariant?.price || product.basePrice,
-          inventory: defaultVariant?.inventory && defaultVariant.inventory.length > 0
-            ? { quantity: defaultVariant.inventory[0].quantity }
-            : (product.inventory && product.inventory.length > 0 ? { quantity: product.inventory[0].quantity } : { quantity: 0 }),
-          defaultVariant: defaultVariant ? {
-            id: defaultVariant.id,
-            price: defaultVariant.price,
-            quantity: defaultVariant.inventory && defaultVariant.inventory.length > 0
-              ? defaultVariant.inventory[0].quantity
-              : 0,
-          } : null,
-          variants: simplifiedVariants
-        };
-      });
-
-      // Sort by inventory quantity (highest first)
-      const sortedProducts = mappedProducts.sort((a, b) => {
-        const aQty = a.inventory?.quantity || 0;
-        const bQty = b.inventory?.quantity || 0;
-        return bQty - aQty;
+        include: LISTING_INCLUDE,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (paging.page - 1) * paging.pageSize,
+        take: paging.pageSize + 1,
       });
 
       return {
         groupName: subCategoryName,
-        products: sortedProducts
+        products: mapListingProducts(products.slice(0, paging.pageSize)),
+        page: paging.page,
+        pageSize: paging.pageSize,
+        hasMore: products.length > paging.pageSize,
       };
     }
     catch (err) {
       await logError(err, { context: 'ProductService.getProductsBySubcategory' });
       throw new InternalServerErrorException('Failed to get products by subcategory', { cause: err });
+    }
+  }
+
+
+  async getProductsByCategoryPaged(categoryId: string, paging: { page: number; pageSize: number }) {
+    try {
+      const products = await this.prisma.product.findMany({
+        where: { AND: [{ categoryId }, IN_STOCK_PRODUCT_WHERE] },
+        include: LISTING_INCLUDE,
+        orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
+        skip: (paging.page - 1) * paging.pageSize,
+        take: paging.pageSize + 1,
+      });
+
+      return {
+        products: mapListingProducts(products.slice(0, paging.pageSize)),
+        page: paging.page,
+        pageSize: paging.pageSize,
+        hasMore: products.length > paging.pageSize,
+      };
+    }
+    catch (err) {
+      await logError(err, { context: 'ProductService.getProductsByCategoryPaged' });
+      throw new InternalServerErrorException('Failed to get category products', { cause: err });
     }
   }
 
