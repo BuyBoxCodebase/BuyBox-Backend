@@ -34,6 +34,10 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule, {
     logger: ['error'],
   });
+  // No ETags => no 304 revalidation. A 304 from this API carries no Access-Control-Allow-Origin,
+  // so a response cached for one site (sell.treides.com) and revalidated by another
+  // (admin.treides.com, same browser cache) kept the first site's header and failed CORS.
+  app.getHttpAdapter().getInstance().set('etag', false);
   app.use(requestTimingMiddleware);
   app.enableCors({
     origin(origin, callback) {
