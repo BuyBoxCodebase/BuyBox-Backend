@@ -505,6 +505,7 @@ export class OrderService {
             totalPrice: true,
             product: {
               select: {
+                id: true,
                 name: true,
                 description: true,
                 images: true,
