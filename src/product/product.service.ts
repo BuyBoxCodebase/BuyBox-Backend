@@ -455,7 +455,8 @@ export class ProductService {
         }
       },
       include: {
-        product: true
+        product: true,
+        options: true
       }
     });
 
@@ -468,8 +469,18 @@ export class ProductService {
 
     // Editing what customers see (name, description, images, options) sends the variant back for admin review.
     // Price, stock and the default flag take effect immediately.
+    // The seller form resubmits every field on each save, so only count a field as changed if it differs
+    // from what is stored.
+    const sameList = (a: string[], b: string[]) =>
+      a.length === b.length && [...a].sort().every((v, i) => v === [...b].sort()[i]);
+    const currentOptionIds = (variant.options ?? []).map((o) => o.optionValueId);
     const contentChanged =
-      !!name || !!description || !!images || (!!optionValueIds && optionValueIds.length > 0);
+      (!!name && name !== variant.name) ||
+      (!!description && description !== variant.description) ||
+      (!!images && !sameList(images, variant.images ?? [])) ||
+      (!!optionValueIds && optionValueIds.length > 0 && !sameList(optionValueIds, currentOptionIds));
+    const optionsChanged =
+      !!optionValueIds && optionValueIds.length > 0 && !sameList(optionValueIds, currentOptionIds);
 
     try {
       const updated = await this.prisma.$transaction(async (tx) => {
@@ -515,11 +526,9 @@ export class ProductService {
           });
 
           if (inventory) {
+            // Inventory rows are created with variantId only (productId is null), so match on variantId.
             await tx.inventory.updateMany({
-              where: {
-                productId: variant.productId,
-                variantId,
-              },
+              where: { variantId },
               data: { quantity: Number(stockQuantity) }
             });
           } else {
@@ -533,7 +542,7 @@ export class ProductService {
         }
 
         // Update option values if provided
-        if (optionValueIds && optionValueIds.length > 0) {
+        if (optionsChanged && optionValueIds) {
           // First, delete existing option connections
           await tx.variantOption.deleteMany({
             where: { variantId }
