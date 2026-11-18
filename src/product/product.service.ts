@@ -574,9 +574,10 @@ export class ProductService {
       });
       await this.searchIndexer.reindexProduct(variant.productId);
 
-      // Back in stock from zero: tell the customers watching this variant (the queuer re-checks approval and stock)
-      const previousQuantity = variant.inventory?.[0]?.quantity ?? 0;
-      if (stockQuantity !== undefined && Number(stockQuantity) > 0 && previousQuantity <= 0) {
+      // Stock went up: tell the customers watching this variant. The queuer re-checks approval and stock, only
+      // contacts ACTIVE subscriptions and caps alerts per unit, so calling it on any increase is safe.
+      const previousQuantity = (variant.inventory ?? []).reduce((total, row) => total + row.quantity, 0);
+      if (stockQuantity !== undefined && Number(stockQuantity) > previousQuantity) {
         await this.stockAlertQueuer.onAvailable([variantId]);
       }
       return updated;

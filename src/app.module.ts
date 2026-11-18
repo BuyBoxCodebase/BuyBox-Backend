@@ -6,7 +6,7 @@ import { ProductModule } from './product/product.module';
 
 import { CartModule } from './cart/cart.module';
 import { OrderModule } from './order/order.module';
-import { InventoryModule } from './inventory/inventory.module';
+// import { InventoryModule } from './inventory/inventory.module'; // disabled: unused
 import { MailerModule } from './mailer/mailer.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { DeliveryModule } from './delivery/delivery.module';
@@ -62,7 +62,7 @@ import { ErrorLogModule, logError } from '../libs/common/src';
     CategoryModule,
     CartModule,
     OrderModule,
-    InventoryModule,
+    // InventoryModule, // disabled: unused
     CouponModule,
     ReferralModule,
     ReviewModule,
