@@ -11,6 +11,7 @@ import { generateSearchTags } from './utils/search-tags.util';
 import { APPROVED_DEFAULT_VARIANT_ARGS, APPROVED_VARIANT_WHERE, IN_STOCK_PRODUCT_WHERE } from './utils/in-stock.util';
 import { LISTING_INCLUDE, mapListingProducts } from './utils/listing.util';
 import { SearchIndexer } from '../search/index/search-indexer.service';
+import { StockAlertQueuer } from '../stock-alerts/stock-alert-queuer.service';
 
 function assertValidDescription(description: string | undefined) {
   if (!description || description.trim().length < MIN_DESCRIPTION_LENGTH) {
@@ -95,7 +96,8 @@ export class ProductService {
   constructor(
     private readonly cloudinaryService: CloudinaryService,
     private readonly prisma: PrismaService,
-    private readonly searchIndexer: SearchIndexer
+    private readonly searchIndexer: SearchIndexer,
+    private readonly stockAlertQueuer: StockAlertQueuer,
   ) { }
 
   async uploadFiles(files: Array<Express.Multer.File>) {
@@ -456,7 +458,8 @@ export class ProductService {
       },
       include: {
         product: true,
-        options: true
+        options: true,
+        inventory: true
       }
     });
 
@@ -570,6 +573,12 @@ export class ProductService {
         };
       });
       await this.searchIndexer.reindexProduct(variant.productId);
+
+      // Back in stock from zero: tell the customers watching this variant (the queuer re-checks approval and stock)
+      const previousQuantity = variant.inventory?.[0]?.quantity ?? 0;
+      if (stockQuantity !== undefined && Number(stockQuantity) > 0 && previousQuantity <= 0) {
+        await this.stockAlertQueuer.onAvailable([variantId]);
+      }
       return updated;
     } catch (error) {
       if (error.code === 'P2002' && error.meta?.target?.includes('sku')) {
