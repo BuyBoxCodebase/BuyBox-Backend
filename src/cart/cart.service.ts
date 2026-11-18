@@ -264,6 +264,7 @@ export class CartService {
                 description: true,
                 images: true,
                 basePrice: true,
+                inventory: { select: { quantity: true } },
                 category: {
                   select: {
                     name: true
@@ -283,6 +284,7 @@ export class CartService {
                 description: true,
                 price: true,
                 images: true,
+                inventory: { select: { quantity: true } },
                 options: {
                   include: {
                     optionValue: {
@@ -328,6 +330,8 @@ export class CartService {
           price: item.variant.price,
           quantity: item.quantity,
           totalPrice: item.totalPrice,
+          // Units available right now; 0 means sold out, so the cart can offer "Notify me" instead
+          stock: item.variant.inventory.reduce((total, row) => total + row.quantity, 0),
           options: options,
           category: item.product.category?.name,
           subCategory: item.product.subCategory?.name
@@ -343,6 +347,7 @@ export class CartService {
           price: item.product.basePrice,
           quantity: item.quantity,
           totalPrice: item.totalPrice,
+          stock: item.product.inventory.reduce((total, row) => total + row.quantity, 0),
           options: [],
           category: item.product.category?.name,
           subCategory: item.product.subCategory?.name

@@ -47,6 +47,7 @@ model Customer {
   referralCode      ReferralCode?
   referralsMade     Referral[]
   reviews           ProductReview[]
+  stockAlerts       StockAlertSubscription[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -914,4 +915,78 @@ model ActivityEvent {
   @@index([customerId, createdAt])
   @@index([visitorId])
   @@index([type, occurredAt])
+}
+
+enum StockAlertStatus {
+  ACTIVE // waiting for the product
+  QUEUED // the product is available; a delivery is waiting for a channel's daily budget
+  NOTIFIED // told once that it is available; done
+  CANCELLED
+  OPTED_OUT // refuses every channel we can reach them on
+}
+
+// "Tell me when this is back in stock". One row per customer and product. Contact details are read live from Customer.
+model StockAlertSubscription {
+  id              String           @id @default(auto()) @map("_id") @db.ObjectId
+  customerId      String           @db.ObjectId
+  customer        Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  variantKey      String
+  brand           String?
+  name            String
+  displayName     String
+  sourceVariantId String?          @db.ObjectId // the sold-out variant the customer was looking at
+  status          StockAlertStatus @default(ACTIVE)
+
+  notifiedAt  DateTime?
+  cancelledAt DateTime?
+  optedOutAt  DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([customerId, variantKey])
+  @@index([customerId, status, createdAt])
+  @@index([variantKey, status, createdAt])
+  @@map("stock_alert_subscriptions")
+}
+
+enum AlertChannel {
+  WHATSAPP
+  EMAIL
+}
+
+enum StockAlertDeliveryStatus {
+  PENDING // waiting to be sent (a channel's budget, or a retry)
+  SENDING // claimed by a dispatch run
+  SENT
+  EXPIRED // no longer worth sending: sold out again, cancelled, or no way to reach them
+  FAILED // gave up after several attempts, or the customer refuses every channel
+}
+
+// Outbox: one row per alert we intend to send. The dispatcher picks the channel when it sends, within each channel's
+// daily budget. customerId and variantKey repeat the subscription's (they never change) so budget and queue-size
+// queries need no lookup.
+model StockAlertDelivery {
+  id                String                   @id @default(auto()) @map("_id") @db.ObjectId
+  subscriptionId    String                   @db.ObjectId
+  customerId        String                   @db.ObjectId
+  variantId         String                   @db.ObjectId // the available variant the customer is sent to
+  variantKey        String
+  status            StockAlertDeliveryStatus @default(PENDING)
+  channel           AlertChannel? // set when sent
+  skipChannels      AlertChannel[] // channels this customer refused; try another
+  attempts          Int                      @default(0)
+  availableAt       DateTime                 @default(now()) // not sent before this (retry back-off)
+  claimedAt         DateTime? // when a dispatch run took it; a stale claim means that run died
+  sentAt            DateTime?
+  providerMessageId String?
+  lastError         String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, availableAt, createdAt])
+  @@index([status, sentAt, channel, customerId])
+  @@index([variantKey, status])
+  @@map("stock_alert_deliveries")
 }

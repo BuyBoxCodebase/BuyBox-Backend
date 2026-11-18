@@ -15,6 +15,15 @@
       "compilerOptions": {
         "tsConfigPath": "libs/common/tsconfig.lib.json"
       }
+    },
+    "stock-alerts-worker": {
+      "type": "application",
+      "root": "apps/stock-alerts-worker",
+      "entryFile": "main",
+      "sourceRoot": "apps/stock-alerts-worker/src",
+      "compilerOptions": {
+        "tsConfigPath": "apps/stock-alerts-worker/tsconfig.app.json"
+      }
     }
   }
 }

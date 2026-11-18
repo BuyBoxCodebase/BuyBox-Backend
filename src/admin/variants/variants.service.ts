@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { Prisma, VariantApprovalStatus } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SearchIndexer } from '../../search/index/search-indexer.service';
+import { StockAlertQueuer } from '../../stock-alerts/stock-alert-queuer.service';
 import { CacheTag, FrontendApp, revalidateFrontendCache } from '../../../libs/common/src';
 
 const MAX_REASON_LENGTH = 500;
@@ -11,6 +12,7 @@ export class AdminVariantsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly searchIndexer: SearchIndexer,
+    private readonly stockAlertQueuer: StockAlertQueuer,
   ) { }
 
   async list(status: VariantApprovalStatus, page: number, limit: number) {
@@ -114,6 +116,11 @@ export class AdminVariantsService {
       await this.searchIndexer.reindexProduct(productId);
     }
     await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+
+    // Newly approved variants may already have stock: tell the customers watching them
+    if (status === VariantApprovalStatus.APPROVED) {
+      await this.stockAlertQueuer.onAvailable(ids);
+    }
 
     return { success: true, updated: ids.length, status };
   }

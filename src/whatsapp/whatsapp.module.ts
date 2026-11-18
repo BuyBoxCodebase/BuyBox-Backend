@@ -5,6 +5,6 @@ import { WhatsAppCloudClient } from './whatsapp-cloud.client';
 
 @Module({
   providers: [WhatsAppCloudClient, SellerOrderNotifier, CustomerOrderNotifier],
-  exports: [SellerOrderNotifier, CustomerOrderNotifier],
+  exports: [SellerOrderNotifier, CustomerOrderNotifier, WhatsAppCloudClient],
 })
 export class WhatsAppModule {}

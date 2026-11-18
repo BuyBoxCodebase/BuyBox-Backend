@@ -2,12 +2,14 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { revalidateFrontendCache, FrontendApp, CacheTag, logError, isClientError } from '../../libs/common/src';
 import { SearchIndexer } from '../search/index/search-indexer.service';
+import { StockAlertQueuer } from '../stock-alerts/stock-alert-queuer.service';
 
 @Injectable()
 export class InventoryService {
     constructor(
         private readonly prisma: PrismaService,
-        private readonly searchIndexer: SearchIndexer
+        private readonly searchIndexer: SearchIndexer,
+        private readonly stockAlertQueuer: StockAlertQueuer,
     ) { }
 
     // Update to handle variant inventory
@@ -91,6 +93,12 @@ export class InventoryService {
             // Products going in/out of stock must be reflected in the cached customer listings and in search
             await this.searchIndexer.reindexProduct(variant.productId);
             await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+
+            // Back in stock from zero: tell the customers watching this product
+            const previousQuantity = variant.inventory?.[0]?.quantity ?? 0;
+            if (quantity > 0 && previousQuantity <= 0) {
+                await this.stockAlertQueuer.onAvailable([variantId]);
+            }
 
             return {
                 success: true,
@@ -316,6 +324,12 @@ export class InventoryService {
                 await this.searchIndexer.reindexProduct(productId);
             }
             await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+
+            // Variants that went from zero to in stock: tell the customers watching them
+            const restocked = updates
+                .filter(({ variantId, quantity }) => quantity > 0 && (variants.find(v => v.id === variantId)?.inventory?.[0]?.quantity ?? 0) <= 0)
+                .map(({ variantId }) => variantId);
+            await this.stockAlertQueuer.onAvailable(restocked);
 
             return {
                 success: true,

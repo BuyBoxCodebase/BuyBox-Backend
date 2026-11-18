@@ -31,6 +31,7 @@ import { LinoModule } from './lino/lino.module';
 import { DeliveryPricingModule } from './delivery-pricing/delivery-pricing.module';
 import { SearchModule } from './search/search.module';
 import { EcocashModule } from './payments/ecocash/ecocash.module';
+import { StockAlertsModule } from './stock-alerts/stock-alerts.module';
 import { ErrorLogModule, logError } from '../libs/common/src';
 
 @Module({
@@ -79,6 +80,7 @@ import { ErrorLogModule, logError } from '../libs/common/src';
     DeliveryPricingModule,
     SearchModule,
     EcocashModule,
+    StockAlertsModule,
   ],
   controllers: [],
   providers: [],
