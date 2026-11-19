@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../customer/auth/guards/jwt-auth.guard';
 import { Roles, RolesGuard } from '../../libs/common/src';
 import { CreateVariantDto } from './dto/create-variant.dto';
 import { UpdateVariantDto } from './dto/update-variant.dto';
+import { DeleteProductsDto } from './dto/delete-products.dto';
 import { parsePaging } from './utils/listing.util';
 
 @Controller('product')
@@ -148,6 +149,13 @@ export class ProductController {
   @Delete('/delete')
   deleteAllProduct(@GetUser("userId") userId: string) {
     return this.productService.deleteAllProduct(userId);
+  }
+
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles("SELLER")
+  @Post('/delete-many')
+  deleteProducts(@GetUser("userId") userId: string, @Body() dto: DeleteProductsDto) {
+    return this.productService.deleteProducts(userId, dto?.productIds);
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)

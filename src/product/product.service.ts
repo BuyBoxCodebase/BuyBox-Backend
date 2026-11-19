@@ -1325,6 +1325,57 @@ export class ProductService {
     };
   }
 
+  async deleteProducts(userId: string, productIds: string[]) {
+    if (!Array.isArray(productIds) || productIds.length === 0) {
+      throw new BadRequestException("Provide at least one product id to delete");
+    }
+    if (productIds.some((id) => typeof id !== 'string' || !id)) {
+      throw new BadRequestException("productIds must be an array of strings");
+    }
+    const ids = [...new Set(productIds)];
+    if (ids.length > 200) {
+      throw new BadRequestException("You can delete at most 200 products at once");
+    }
+
+    // Only products owned by this seller may be deleted
+    const owned = await this.prisma.product.findMany({
+      where: { id: { in: ids }, sellerId: userId },
+      select: { id: true },
+    });
+    const ownedIds = owned.map((p) => p.id);
+    const skippedIds = ids.filter((id) => !ownedIds.includes(id));
+
+    if (ownedIds.length === 0) {
+      throw new BadRequestException("You can't delete these products");
+    }
+
+    try {
+      // Prisma will cascade delete all related records (variants, options, etc.)
+      await this.prisma.product.deleteMany({
+        where: { id: { in: ownedIds }, sellerId: userId },
+      });
+
+      for (const id of ownedIds) {
+        await this.searchIndexer.reindexProduct(id); // the product is gone, so its search document is removed
+      }
+      await revalidateFrontendCache(FrontendApp.CUSTOMER_WEB, CacheTag.SUBCATEGORY_PRODUCTS);
+      return {
+        success: true,
+        message: `${ownedIds.length} product(s) deleted`,
+        deletedIds: ownedIds,
+        skippedIds,
+      };
+    } catch (error) {
+      if (!isClientError(error)) {
+        await logError(error, { context: 'ProductService.deleteProducts', extra: { productIds: ownedIds } });
+      }
+      return {
+        success: false,
+        message: "Failed to delete products: " + error.message,
+      };
+    }
+  }
+
   async deleteProduct(userId: string, productId: string) {
     const existsProduct = await this.prisma.product.findUnique({
       where: {
