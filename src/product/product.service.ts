@@ -901,6 +901,7 @@ export class ProductService {
   }
 
   async getSingleProduct(productId: string) {
+    if (!/^[a-f0-9]{24}$/i.test(productId)) throw new NotFoundException('Product not found'); // not an ObjectId: Prisma would throw P2023
     const product = await this.prisma.product.findUnique({
       where: {
         id: productId
@@ -978,6 +979,7 @@ export class ProductService {
   }
 
   async getProductVariantById(variantId: string) {
+    if (!/^[a-f0-9]{24}$/i.test(variantId)) throw new NotFoundException('Variant not found'); // not an ObjectId: Prisma would throw P2023
     const variant = await this.prisma.productVariant.findFirst({
       where: {
         id: variantId,
@@ -1101,6 +1103,7 @@ export class ProductService {
   // Customers only see approved variants. When `sellerId` is passed (seller dashboard), the product must belong
   // to that seller and every variant is returned together with its approval status.
   async getProductVariants(productId: string, optionFilters?: Record<string, string>, sellerId?: string) {
+    if (!/^[a-f0-9]{24}$/i.test(productId)) throw new NotFoundException('Product not found'); // not an ObjectId: Prisma would throw P2023
     const product = await this.prisma.product.findFirst({
       where: {
         id: productId,
@@ -1170,6 +1173,7 @@ export class ProductService {
   async getOptionValues(productId: string) {
     if (!productId)
       throw new BadRequestException("ProductId is not provided");
+    if (!/^[a-f0-9]{24}$/i.test(productId)) throw new BadRequestException("ProductId is not valid");
     const optionValues = await this.prisma.productOption.findMany({
       where: {
         productId: productId,
@@ -1434,7 +1438,7 @@ export class ProductService {
     });
 
     if (!product) {
-      throw new Error('Product not found');
+      throw new NotFoundException('Product not found');
     }
 
     const results = [];

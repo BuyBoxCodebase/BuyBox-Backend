@@ -14,6 +14,7 @@ export class LocationService {
   }
 
   async findOne(id: string) {
+    if (!/^[a-f0-9]{24}$/i.test(id)) throw new NotFoundException('Location not found'); // not an ObjectId: Prisma would throw P2023
     const location = await this.prisma.location.findUnique({
       where: { id },
     });

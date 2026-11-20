@@ -146,13 +146,19 @@ export class DeliveryAgentAuthService {
 
   async verifyGoogleIdTokenDeliveryAgent(idToken: string) {
     console.log('Delivery Agent IDToken:', idToken);
-    const ticket = await new OAuth2Client(
-      process.env.GOOGLE_CLIENT_MOBILE_DELIVERY_ID,
-    ).verifyIdToken({
-      idToken,
-      audience: process.env.GOOGLE_CLIENT_MOBILE_DELIVERY_ID,
-    });
-    const payload = ticket.getPayload();
+    let payload;
+    try {
+      const ticket = await new OAuth2Client(
+        process.env.GOOGLE_CLIENT_MOBILE_DELIVERY_ID,
+      ).verifyIdToken({
+        idToken,
+        audience: process.env.GOOGLE_CLIENT_MOBILE_DELIVERY_ID,
+      });
+      payload = ticket.getPayload();
+    } catch {
+      // malformed, expired or wrongly signed token
+      throw new UnauthorizedException('Invalid Google token');
+    }
     if (!payload) {
       throw new UnauthorizedException('Invalid Google token');
     }

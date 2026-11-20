@@ -26,16 +26,22 @@ export class AdminAuthService {
     }
 
     async googleLogin(profile: any) {
-        const user = await this.prisma.admin.upsert({
-            where: { email: profile.emails[0].value },
-            update: { name: profile.displayName, profilePic: profile.photos[0].value },
-            create: {
-                email: profile.emails[0].value,
-                googleId: profile.id,
-                name: profile.displayName,
-                profilePic: profile.photos[0].value,
-            },
-        });
+        // find + update/create instead of upsert: this MongoDB deployment doesn't support the transaction upsert needs
+        const email = profile.emails[0].value;
+        const existing = await this.prisma.admin.findUnique({ where: { email } });
+        const user = existing
+            ? await this.prisma.admin.update({
+                where: { email },
+                data: { name: profile.displayName, profilePic: profile.photos[0].value },
+            })
+            : await this.prisma.admin.create({
+                data: {
+                    email,
+                    googleId: profile.id,
+                    name: profile.displayName,
+                    profilePic: profile.photos[0].value,
+                },
+            });
 
         const payload: JwtPayload = { email: user.email, sub: user.id, role: user.role };
         const accessToken = this.jwtService.sign(payload, { expiresIn: '15m' });

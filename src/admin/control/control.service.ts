@@ -271,7 +271,7 @@ export class AdminControlService {
   async getAllOrders(page = 1, limit = 10) {
     const skip = (page - 1) * limit;
 
-    const [orders, total] = await Promise.all([
+    const [rawOrders, total] = await Promise.all([
       this.prisma.order.findMany({
         skip,
         take: limit,
@@ -279,24 +279,22 @@ export class AdminControlService {
           createdAt: 'desc',
         },
         include: {
-          products: {
-            select: {
-              product: {
-                select: {
-                  seller: {
-                    select: {
-                      name: true,
-                      phoneNumber: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
+          products: { select: { productId: true } },
         },
       }),
       this.prisma.order.count(),
     ]);
+
+    // Products are loaded separately: an order line whose product was deleted would make a joined `product` select fail
+    const products = await this.prisma.product.findMany({
+      where: { id: { in: [...new Set(rawOrders.flatMap((order) => order.products.map((line) => line.productId)))] } },
+      select: { id: true, seller: { select: { name: true, phoneNumber: true } } },
+    });
+    const productById = new Map(products.map((product) => [product.id, product]));
+    const orders = rawOrders.map((order) => ({
+      ...order,
+      products: order.products.map((line) => ({ product: productById.get(line.productId) ? { seller: productById.get(line.productId).seller } : null })),
+    }));
 
     return {
       data: orders,

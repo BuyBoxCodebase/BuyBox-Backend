@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../src/prisma/prisma.service';
 import { AddToCartDto, RemoveFromCartDto } from './dto/create-cart.dto';
 import { errorWithCause } from '../../libs/common/src';
@@ -175,7 +175,7 @@ export class CartService {
       });
 
       if (!cart) {
-        throw new Error("Cart not found for this user");
+        throw new NotFoundException("Cart not found for this user");
       }
 
       // Find cart item

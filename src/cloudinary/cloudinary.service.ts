@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable } from '@nestjs/common';
 import { UploadApiErrorResponse, UploadApiResponse, v2 } from 'cloudinary';
 import * as streamifier from 'streamifier';
 import { CLOUDINARY } from './constants';
@@ -10,6 +10,10 @@ export class CloudinaryService {
     async uploadImages(
         files: Array<Express.Multer.File>,
     ): Promise<(UploadApiResponse | UploadApiErrorResponse)[]> {
+        if (!Array.isArray(files) || files.length === 0) {
+            throw new BadRequestException("No files were uploaded");
+        }
+
         const promises = files.map((file: Express.Multer.File) => {
             return new Promise<UploadApiResponse | UploadApiErrorResponse>((resolve, reject) => {
                 const upload = v2.uploader.upload_stream((error, result) => {

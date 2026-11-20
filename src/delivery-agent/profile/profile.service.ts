@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { CloudinaryService } from 'src/cloudinary/cloudinary.service';
 import { PrismaService } from 'src/prisma/prisma.service';
 
@@ -49,6 +49,10 @@ export class DeliveryAgentProfileService {
                 profilePic: data.profilePic,
                 isCompleted: true,
             }
+        }).catch((error) => {
+            // P2025: the account no longer exists
+            if (error?.code === 'P2025') throw new NotFoundException('Delivery agent not found');
+            throw error;
         });
 
         return {

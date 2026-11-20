@@ -59,10 +59,17 @@ export class ReviewService {
           comment: true,
           imageUrl: true,
           createdAt: true,
-          user: { select: { name: true, profilePic: true } },
+          userId: true,
         },
       }),
     ]);
+
+    // Authors are loaded separately: a review whose customer was deleted would make a joined `user` select fail
+    const authors = await this.prisma.customer.findMany({
+      where: { id: { in: [...new Set(reviews.map((r) => r.userId))] } },
+      select: { id: true, name: true, profilePic: true },
+    });
+    const authorById = new Map(authors.map((a) => [a.id, a]));
 
     const distribution: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
     let count = 0;
@@ -85,8 +92,8 @@ export class ReviewService {
         comment: r.comment,
         imageUrl: r.imageUrl,
         createdAt: r.createdAt,
-        author: displayName(r.user?.name),
-        authorPic: r.user?.profilePic ?? null,
+        author: displayName(authorById.get(r.userId)?.name),
+        authorPic: authorById.get(r.userId)?.profilePic ?? null,
       })),
       page: currentPage,
       pageSize: take,

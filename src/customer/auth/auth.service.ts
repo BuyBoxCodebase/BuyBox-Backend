@@ -46,6 +46,9 @@ export class CustomerAuthService {
     }
 
     async registerCustomer(email: string, password: string, name: string, phoneNumber: string) {
+        if (typeof password !== 'string' || !password) {
+            throw new BadRequestException('Password is required');
+        }
         const hashedPassword = await argon2.hash(password);
 
         // Check if email already exists
@@ -155,7 +158,7 @@ export class CustomerAuthService {
     }
 
     async resetPassword(token: string, newPassword: string) {
-        if (!newPassword || newPassword.length < 8) {
+        if (typeof token !== 'string' || typeof newPassword !== 'string' || newPassword.length < 8) {
             throw new BadRequestException('Password must be at least 8 characters');
         }
 
@@ -225,11 +228,17 @@ export class CustomerAuthService {
 
     async verifyGoogleIdToken(idToken: string) {
         console.log('IDToken:', idToken);
-        const ticket = await new OAuth2Client(process.env.GOOGLE_CLIENT_MOBILE_ID).verifyIdToken({
-            idToken,
-            audience: process.env.GOOGLE_CLIENT_MOBILE_ID,
-        });
-        const payload = ticket.getPayload();
+        let payload;
+        try {
+            const ticket = await new OAuth2Client(process.env.GOOGLE_CLIENT_MOBILE_ID).verifyIdToken({
+                idToken,
+                audience: process.env.GOOGLE_CLIENT_MOBILE_ID,
+            });
+            payload = ticket.getPayload();
+        } catch {
+            // malformed, expired or wrongly signed token
+            throw new UnauthorizedException('Invalid Google token');
+        }
         if (!payload) {
             throw new UnauthorizedException('Invalid Google token');
         }

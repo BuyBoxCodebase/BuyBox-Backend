@@ -148,6 +148,9 @@ export class SellerAuthService {
   }
 
   async loginSeller(email: string, password: string) {
+    if (typeof email !== 'string' || !email || typeof password !== 'string' || !password) {
+      throw new BadRequestException('Email and password are required');
+    }
     const user = await this.prisma.seller.findUnique({
       where: { email },
     });
@@ -233,20 +236,26 @@ export class SellerAuthService {
   }
 
   async sellerGoogleLogin(profile: any) {
-    const user = await this.prisma.seller.upsert({
-      where: { email: profile.emails[0].value },
-      update: {
-        name: profile.displayName,
-        profilePic: profile.photos[0].value,
-      },
-      create: {
-        email: profile.emails[0].value,
-        googleId: profile.id,
-        name: profile.displayName,
-        profilePic: profile.photos[0].value,
-        isCompleted: false,
-      },
-    });
+    // find + update/create instead of upsert: this MongoDB deployment doesn't support the transaction upsert needs
+    const email = profile.emails[0].value;
+    const existing = await this.prisma.seller.findUnique({ where: { email } });
+    const user = existing
+      ? await this.prisma.seller.update({
+        where: { email },
+        data: {
+          name: profile.displayName,
+          profilePic: profile.photos[0].value,
+        },
+      })
+      : await this.prisma.seller.create({
+        data: {
+          email,
+          googleId: profile.id,
+          name: profile.displayName,
+          profilePic: profile.photos[0].value,
+          isCompleted: false,
+        },
+      });
 
     const payload: JwtPayload = {
       email: user.email,

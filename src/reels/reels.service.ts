@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { CloudinaryService } from '../../src/cloudinary/cloudinary.service';
 import { PrismaService } from '../../src/prisma/prisma.service';
 
@@ -17,6 +17,9 @@ export class ReelsService {
         { productId, size, caption, videoUrl }
             : { productId: string, size: string, caption: string, videoUrl: string }
     ) {
+        if ([productId, size, caption, videoUrl].some((value) => typeof value !== 'string' || !value)) {
+            throw new BadRequestException('productId, size, caption and videoUrl are required');
+        }
         const reel = await this.prisma.reel.create({
             data: {
                 productId: productId,
@@ -30,6 +33,10 @@ export class ReelsService {
     }
 
     async getReels({ subcategory }: { subcategory: string }) {
+        // ?subcategory[not]=x arrives as an object, and a malformed id makes Prisma throw P2023
+        if (subcategory !== undefined && subcategory !== "" && (typeof subcategory !== "string" || !/^[a-f0-9]{24}$/i.test(subcategory))) {
+            throw new BadRequestException("Invalid subcategory id");
+        }
         const reels = await this.prisma.reel.findMany({
             where: subcategory ? { product: { subCategoryId: subcategory } } : {},
             include: {

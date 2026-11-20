@@ -17,6 +17,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   async validate(payload: JwtPayload) {
     const { sub: userId, email, role } = payload;
+    // `sub` is used directly as a Prisma `id` filter, so anything but a string (e.g. an object) must be rejected.
+    // Must also be a clean 24-char hex ObjectId (padded/garbled ids make Prisma throw P2023).
+    if (typeof userId !== 'string' || !/^[a-f0-9]{24}$/i.test(userId)) {
+      throw new UnauthorizedException('Invalid token');
+    }
     let user: Customer | Seller | DeliveryAgent | Admin;
 
     if (role === "CUSTOMER") {

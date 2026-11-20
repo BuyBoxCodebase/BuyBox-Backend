@@ -185,6 +185,10 @@ export class SellerProfileService {
                 ...(data.brandPic !== undefined && { brandPic: data.brandPic }),
                 ...(coordinates && { coordinates }),
             }
+        }).catch((error) => {
+            // P2025: the account no longer exists
+            if (error?.code === 'P2025') throw new NotFoundException('Seller not found');
+            throw error;
         });
 
         return {

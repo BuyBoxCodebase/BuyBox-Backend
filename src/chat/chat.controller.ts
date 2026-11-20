@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { BadRequestException, Body, Controller, Post } from '@nestjs/common';
 import { ChatService } from './chat.service';
 import { GetUser } from '../../libs/common/src';
 
@@ -15,6 +15,10 @@ export class ChatController {
     // buyerId:"", // The buyerId, the person who is trying to contact the seller
     // sellerId:"", // The sellerId, with whom buyer wants to contact, basically the person who is the owner of the product's brand
     // }
+
+    if (!body?.identifier || typeof body.identifier !== 'object') {
+      throw new BadRequestException('identifier is required');
+    }
 
     return this.chatService.sendMessage({
       senderId: userId,

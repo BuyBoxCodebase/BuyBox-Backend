@@ -343,12 +343,6 @@ export class AdsService {
             }
         }
 
-        // Check for schedule constraints
-        query.AND = [
-            ...query.AND || [],
-            this.buildScheduleConditions()
-        ];
-
         try {
             const ads = await this.prisma.advertisement.findMany({
                 where: query,
@@ -365,7 +359,10 @@ export class AdsService {
             });
 
             // Filter ads that have reached maximum impressions or clicks
+            // Schedule constraints are checked here: Prisma can't filter a nullable Json column with a plain `null`.
+            const now = new Date();
             const filteredAds = ads.filter(ad => {
+                if (!this.isWithinSchedule(ad.scheduleConfig, now)) return false;
                 if (ad.maxImpressions && ad.impressions >= ad.maxImpressions) return false;
                 if (ad.maxClicks && ad.clicks >= ad.maxClicks) return false;
                 if (ad.budget && ad.budget <= 0) return false;
@@ -403,46 +400,30 @@ export class AdsService {
         return dateJoined >= thirtyDaysAgo;
     }
 
-    private buildScheduleConditions(): any {
-        const now = new Date();
-        const dayOfWeek = now.getDay(); // 0-6 (Sunday-Saturday)
-        const hour = now.getHours();
-        const minute = now.getMinutes();
+    private isWithinSchedule(config: unknown, now: Date): boolean {
+        if (!config || typeof config !== 'object' || Array.isArray(config)) return true; // no schedule constraints
 
-        return {
-            OR: [
-                { scheduleConfig: null }, // No schedule constraints
-                {
-                    AND: [
-                        {
-                            OR: [
-                                { scheduleConfig: { path: ['days'], array_contains: dayOfWeek.toString() } },
-                                { scheduleConfig: { path: ['days'], equals: null } }
-                            ]
-                        },
-                        {
-                            OR: [
-                                {
-                                    AND: [
-                                        { scheduleConfig: { path: ['timeStart'], lte: `${hour}:${minute}` } },
-                                        { scheduleConfig: { path: ['timeEnd'], gte: `${hour}:${minute}` } }
-                                    ]
-                                },
-                                {
-                                    AND: [
-                                        { scheduleConfig: { path: ['timeStart'], equals: null } },
-                                        { scheduleConfig: { path: ['timeEnd'], equals: null } }
-                                    ]
-                                }
-                            ]
-                        }
-                    ]
-                }
-            ]
-        };
+        const { days, timeStart, timeEnd } = config as { days?: unknown; timeStart?: unknown; timeEnd?: unknown };
+
+        if (Array.isArray(days) && days.length > 0) {
+            if (!days.some(d => String(d) === String(now.getDay()))) return false;
+        }
+
+        if (typeof timeStart === 'string' && typeof timeEnd === 'string') {
+            const pad = (n: number) => String(n).padStart(2, '0');
+            const current = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+            if (current < timeStart.padStart(5, '0') || current > timeEnd.padStart(5, '0')) return false;
+        }
+
+        return true;
     }
 
     async findOne(id: string) {
+        // Not an ObjectId (e.g. GET /ads/interaction): without this Prisma throws P2023 and the request 500s
+        if (!/^[a-f0-9]{24}$/i.test(id)) {
+            throw new NotFoundException(`Advertisement with ID ${id} not found`);
+        }
+
         const cacheKey = `ad_${id}`;
         // const cachedAd = await this.cacheService.get(cacheKey);
 
@@ -575,6 +556,9 @@ export class AdsService {
     }
 
     async logInteraction(logData: LogAdInteractionDto) {
+        if (typeof logData?.advertisementId !== 'string' || !/^[a-f0-9]{24}$/i.test(logData.advertisementId)) {
+            throw new BadRequestException('A valid advertisementId is required');
+        }
         try {
             // Find the advertisement
             const ad = await this.prisma.advertisement.findUnique({

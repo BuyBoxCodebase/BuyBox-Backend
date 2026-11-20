@@ -19,25 +19,26 @@ export class SearchController {
   @Get()
   search(@Query() query: Record<string, string>) {
     return this.searchService.searchText({
-      q: (query.q ?? '').slice(0, 200),
+      q: (asString(query.q) ?? '').slice(0, 200),
       filters: {
-        brand: query.brand,
-        category: query.category,
-        gender: query.gender,
-        colour: query.colour,
-        size: query.size,
-        minPrice: toNumber(query.minPrice),
-        maxPrice: toNumber(query.maxPrice),
+        brand: asString(query.brand),
+        category: asString(query.category),
+        gender: asString(query.gender),
+        colour: asString(query.colour),
+        size: asString(query.size),
+        minPrice: toNumber(asString(query.minPrice)),
+        maxPrice: toNumber(asString(query.maxPrice)),
       },
-      sort: (SORT_OPTIONS as readonly string[]).includes(query.sort) ? (query.sort as SortOption) : undefined,
-      page: clamp(toNumber(query.page) ?? 1, 1, 1000),
-      pageSize: clamp(toNumber(query.pageSize) ?? DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE),
+      sort: (SORT_OPTIONS as readonly string[]).includes(asString(query.sort)) ? (query.sort as SortOption) : undefined,
+      page: clamp(toNumber(asString(query.page)) ?? 1, 1, 1000),
+      pageSize: clamp(toNumber(asString(query.pageSize)) ?? DEFAULT_PAGE_SIZE, 1, MAX_PAGE_SIZE),
     });
   }
 
   // GET /search/suggest?q=nik
   @Get('suggest')
-  suggest(@Query('q') q = '') {
+  suggest(@Query('q') rawQuery: unknown) {
+    const q = asString(rawQuery) ?? '';
     return this.searchService.suggest(q.slice(0, 100));
   }
 
@@ -59,4 +60,9 @@ function toNumber(value: string | undefined): number | undefined {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(Math.floor(value), min), max);
+}
+
+// ?q[]=a or ?size[x]=1 arrive as arrays/objects; only a plain string is a usable value.
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
 }

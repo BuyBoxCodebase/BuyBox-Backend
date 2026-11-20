@@ -55,7 +55,7 @@ export class OrderService {
           });
 
           if (!cart || cart.products.length === 0) {
-            throw new Error("Cart not found or is empty");
+            throw new BadRequestException("Cart not found or is empty");
           }
 
           totalAmount = cart.products.reduce((sum, item) => sum + item.totalPrice, 0);
@@ -213,7 +213,7 @@ export class OrderService {
             totalPrice: itemTotalPrice,
           });
         } else {
-          throw new Error("Either cartId or products must be provided");
+          throw new BadRequestException("Either cartId or products must be provided");
         }
 
         totalAmount = Math.round((totalAmount + cityMarkup * totalUnits) * 100) / 100;
@@ -876,7 +876,7 @@ export class OrderService {
       });
 
       if (!order) {
-        throw new Error("Order not found or cannot be cancelled");
+        throw new NotFoundException("Order not found or cannot be cancelled");
       }
 
       // Return items to inventory
